@@ -15,6 +15,7 @@ signals:
 public slots:
 	void createImageWindow(int rows = 1, int cols = 1);
 	void setCurrentImageWindow(int curr);
+	ImageWidget * getCurrentImageWindow();
 
 protected:
 	QList<ImageWidget *> imageWidgets;

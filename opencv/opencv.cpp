@@ -80,3 +80,20 @@ Mat OpenCV::importMatrix(QString filename)
 	delete []data;
 	return m;
 }
+
+int OpenCV::exportMatrixTxt(const QString &filename, const Mat &m)
+{
+	QFile f(filename);
+	if (!f.open(QIODevice::WriteOnly))
+		return -EPERM;
+	for (int i = 0; i < m.rows; i++) {
+		QString line;
+		for (int j = 0; j < m.cols - 1; j++) {
+			line.append(QString("%1,").arg(m.at<float>(i, j)));
+		}
+		line.append(QString("%1\n").arg(m.at<float>(i, m.cols - 1)));
+		f.write(line.toUtf8());
+	}
+	f.close();
+	return 0;
+}

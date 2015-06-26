@@ -89,6 +89,7 @@ void ScriptEdit::keyPressEvent(QKeyEvent *ev)
 	} else if (ev->key() == Qt::Key_Enter || ev->key() == Qt::Key_Return) {
 		prompt = true;
 		commandEntered(textCursor().block().text().remove("$>"));
+		moveCursor(QTextCursor::EndOfLine);
 	} else if (ev->key() == Qt::Key_Up) {
 		if (histPos <= 0 || histPos >= history.size())
 			histPos = history.size() - 1;
@@ -136,4 +137,3 @@ void ScriptEdit::replaceCurrentLine(const QString &text)
 	insertPrompt();
 	c.insertText(text);
 }
-

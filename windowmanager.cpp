@@ -9,6 +9,8 @@ WindowManager::WindowManager(QObject *parent) :
 
 void WindowManager::createImageWindow(int rows, int cols)
 {
+	if (rows == 0 || cols == 0)
+		return;
 	ImageWidget *iw = new ImageWidget(rows, cols);
 	iw->show();
 	imageWidgets << iw;
@@ -19,4 +21,9 @@ void WindowManager::setCurrentImageWindow(int curr)
 {
 	if (curr >= 0 && curr < imageWidgets.size())
 		current = curr;
+}
+
+ImageWidget *WindowManager::getCurrentImageWindow()
+{
+	return imageWidgets[current];
 }

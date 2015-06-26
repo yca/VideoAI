@@ -72,7 +72,7 @@ ImageWidget::~ImageWidget()
 	grid.clear();
 }
 
-void ImageWidget::setCurrent(int row, int col)
+void ImageWidget::setCurrentCell(int row, int col)
 {
 	curr = row * gridCols + col;
 }

@@ -24,7 +24,9 @@ SOURCES += main.cpp\
     vision/pyramids.cpp \
     opencv/opencv.cpp \
     debug.cpp \
-    windowmanager.cpp
+    windowmanager.cpp \
+    scriptmanager.cpp \
+    common.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -36,7 +38,9 @@ HEADERS  += mainwindow.h \
     vision/pyramids.h \
     opencv/opencv.h \
     debug.h \
-    windowmanager.h
+    windowmanager.h \
+    scriptmanager.h \
+    common.h
 
 FORMS    += mainwindow.ui
 

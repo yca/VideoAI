@@ -3,6 +3,8 @@
 #include "datasetmanager.h"
 #include "debug.h"
 #include "windowmanager.h"
+#include "scriptmanager.h"
+#include "common.h"
 
 #include "scripting/scriptedit.h"
 
@@ -20,12 +22,21 @@
 #include <QScriptEngine>
 #include <QStringListModel>
 
-Q_DECLARE_METATYPE(Mat)
-
 static void addQObject(QScriptEngine &e, QObject *obj, const QString &oname)
 {
 	QScriptValue iv = e.newQObject(obj);
 	e.globalObject().setProperty(oname, iv);
+}
+
+static const QStringList getObjectCompletions(const QMetaObject &obj)
+{
+	QStringList methods;
+	for (int j = obj.methodOffset(); j < obj.methodCount(); j++) {
+		if (obj.method(j).methodType() == QMetaMethod::Slot ||
+				obj.method(j).methodType() == QMetaMethod::Method)
+			methods << QString::fromLatin1(obj.method(j).methodSignature());
+	}
+	return methods;
 }
 
 class MainWindowPriv
@@ -44,27 +55,8 @@ public:
 	Pyramids *pyr;
 	QSettings sets;
 	WindowManager wm;
+	ScriptManager sm;
 };
-
-QScriptValue matToScriptValue(QScriptEngine *eng, const Mat &m)
-{
-	OpenCV *cvmat = new OpenCV(m);
-	QScriptValue obj = eng->newQObject(cvmat, QScriptEngine::ScriptOwnership);
-	///QScriptValue obj = eng->newObject();
-	obj.setProperty("rows", m.rows);
-	obj.setProperty("cols", m.cols);
-	return obj;
-}
-
-void scriptToMat(const QScriptValue &obj, Mat &m)
-{
-	if (obj.isObject()) {
-		OpenCV *cvmat = (OpenCV *)obj.toQObject();
-		m = cvmat->getRefMat();
-	}
-	//m.rows = obj.property("rows").toInt32();
-	//m.cols = obj.property("cols").toInt32();
-}
 
 MainWindow::MainWindow(QWidget *parent) :
 	QMainWindow(parent),
@@ -72,8 +64,6 @@ MainWindow::MainWindow(QWidget *parent) :
 	p(new MainWindowPriv)
 {
 	ui->setupUi(this);
-
-	qScriptRegisterMetaType(&p->eng, matToScriptValue, scriptToMat);
 
 	p->edit = new ScriptEdit(ui->frameScript);
 	p->edit->setFocus();
@@ -91,10 +81,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
 	p->pyr = new Pyramids(this);
 
+	p->sm.setScriptEngine(&p->eng);
+	p->sm.setWindowManager(&p->wm);
+
 	addScriptObject(p->dm, "dm");
 	addScriptObject(p->image, "iw");
 	addScriptObject(p->pyr, "pyr");
 	addScriptObject(&p->wm, "wm");
+	addScriptObject(&p->sm, "sm");
 
 	/* find completions */
 	QHashIterator<QString, QObject *> i(scriptObjects);
@@ -110,13 +104,11 @@ MainWindow::MainWindow(QWidget *parent) :
 		}
 		if (methods.size())
 			p->edit->insertCompletion(i.key(), methods);
+		addQObject(p->eng, i.value(), i.key());
 	}
-
-	QHashIterator<QString, QObject *> j(scriptObjects);
-	while (j.hasNext()) {
-		j.next();
-		addQObject(p->eng, j.value(), j.key());
-	}
+	p->edit->insertCompletion("iw", getObjectCompletions(ImageWidget::staticMetaObject));
+	p->edit->insertCompletion("cv", getObjectCompletions(OpenCV::staticMetaObject));
+	p->edit->insertCompletion("cmn", getObjectCompletions(Common::staticMetaObject));
 }
 
 MainWindow::~MainWindow()
@@ -138,6 +130,8 @@ void MainWindow::scriptTextChanged(const QString &text)
 	p->eng.evaluate(text);
 	if (p->eng.hasUncaughtException())
 		qDebug() << p->eng.uncaughtExceptionLineNumber() << p->eng.uncaughtException().toString();
+	activateWindow();
+	p->edit->setFocus();
 }
 
 void MainWindow::addScriptObject(QObject *obj, const QString &name)

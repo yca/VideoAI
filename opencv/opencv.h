@@ -24,6 +24,7 @@ public slots:
 	static void printMatInfo(const Mat &m);
 	static int exportMatrix(QString filename, const Mat &m);
 	static Mat importMatrix(QString filename);
+	static int exportMatrixTxt(const QString &filename, const Mat &m);
 protected:
 	Mat refMat;
 };
