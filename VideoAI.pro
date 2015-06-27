@@ -26,7 +26,8 @@ SOURCES += main.cpp\
     debug.cpp \
     windowmanager.cpp \
     scriptmanager.cpp \
-    common.cpp
+    common.cpp \
+    widgets/userscriptwidget.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -40,9 +41,11 @@ HEADERS  += mainwindow.h \
     debug.h \
     windowmanager.h \
     scriptmanager.h \
-    common.h
+    common.h \
+    widgets/userscriptwidget.h
 
-FORMS    += mainwindow.ui
+FORMS    += mainwindow.ui \
+    widgets/userscriptwidget.ui
 
 RESOURCES += \
     scripting/images.qrc

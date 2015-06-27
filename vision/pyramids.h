@@ -18,7 +18,8 @@ signals:
 
 public slots:
 	Mat makeSpm(const QString &filename, int L);
-	Mat makeHistImage(const Mat &hist, int scale = 0);
+	Mat makeSpmFromMat(const Mat &im, int L);
+	Mat makeHistImage(const Mat &hist, int scale = 0, int foreColor = Qt::white, int backColor = Qt::black);
 	void setDict(const QString &filename);
 	void setDict(const Mat &codewords);
 

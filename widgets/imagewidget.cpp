@@ -79,7 +79,7 @@ void ImageWidget::setCurrentCell(int row, int col)
 
 void ImageWidget::showImageMat(const Mat &image)
 {
-	mDebug("size: %dx%d", image.cols, image.rows);
+	mInfo("size: %dx%d", image.cols, image.rows);
 	grid[curr]->showMat(image);
 	update();
 }

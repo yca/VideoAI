@@ -24,9 +24,21 @@ OpenCV::~OpenCV()
 	qDebug("deleting my object");
 }
 
+Mat OpenCV::blendImages(const Mat &im1, const Mat &im2, double alpha, double beta)
+{
+	Mat dst;
+	addWeighted(im1, alpha, im2, beta, 0.0, dst);
+	return dst;
+}
+
 void OpenCV::saveImage(const QString &filename, const Mat &m)
 {
 	imwrite(qPrintable(filename), m);
+}
+
+Mat OpenCV::loadImage(const QString &filename)
+{
+	return imread(qPrintable(filename), IMREAD_GRAYSCALE);
 }
 
 void OpenCV::printMatInfo(const Mat &m)

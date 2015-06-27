@@ -15,6 +15,7 @@ using namespace xfeatures2d;
 #include "opencv/opencv.h"
 
 #include <QFile>
+#include <QColor>
 
 static FlannBasedMatcher *matcher = NULL;
 #pragma omp threadprivate(matcher)
@@ -65,6 +66,11 @@ Mat Pyramids::makeSpm(const QString &filename, int L)
 	if (!dict.rows)
 		return Mat();
 	Mat im(imread(qPrintable(filename), IMREAD_GRAYSCALE));
+	return makeSpmFromMat(im, L);
+}
+
+Mat Pyramids::makeSpmFromMat(const Mat &im, int L)
+{
 	int imW = im.cols;
 	int imH = im.rows;
 
@@ -93,7 +99,6 @@ Mat Pyramids::makeSpm(const QString &filename, int L)
 
 	/* normalize histogram */
 	linear /= keypoints.size();
-	ffDebug() << norm(linear, NORM_L1) << keypoints.size();
 
 	return linear;
 }
@@ -111,9 +116,25 @@ void Pyramids::setDict(const Mat &codewords)
 	}
 }
 
-Mat Pyramids::makeHistImage(const Mat &hist, int scale)
+Mat Pyramids::makeHistImage(const Mat &hist, int scale, int foreColor, int backColor)
 {
 	Mat img = Mat::zeros(256, hist.cols, CV_8UC3);
+	if (backColor != Qt::black) {
+		int off = 0;
+		if (foreColor == Qt::red)
+			off = 0;
+		else if (foreColor == Qt::green)
+			off = 1;
+		else if (foreColor == Qt::blue)
+			off = 2;
+		for (int i = off; i < img.rows * img.cols * 3; i += 3)
+			img.at<uchar>(i) = 255;
+	}
+	Scalar color = Scalar(255, 255, 255);
+	if (foreColor != Qt::white) {
+		QColor clr = QColor(Qt::GlobalColor(foreColor));
+		color = Scalar(clr.red(), clr.green(), clr.blue());
+	}
 	int lBottom = img.rows;
 	double max = 1.0;
 	double hs = 1.0;
@@ -127,7 +148,7 @@ Mat Pyramids::makeHistImage(const Mat &hist, int scale)
 		int ly = lBottom - height * hist.at<float>(i) * hs / max;
 		if (ly < 0)
 			ly = 0;
-		line(img, Point(lx, lBottom), Point(lx, ly), Scalar(255, 255, 255), 1);
+		line(img, Point(lx, lBottom), Point(lx, ly), color, 1);
 	}
 	return img;
 }

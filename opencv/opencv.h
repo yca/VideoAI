@@ -20,7 +20,9 @@ public:
 signals:
 
 public slots:
+	static Mat blendImages(const Mat &im1, const Mat &im2, double alpha = 0.5, double beta = 0.5);
 	static void saveImage(const QString &filename, const Mat &m);
+	static Mat loadImage(const QString &filename);
 	static void printMatInfo(const Mat &m);
 	static int exportMatrix(QString filename, const Mat &m);
 	static Mat importMatrix(QString filename);

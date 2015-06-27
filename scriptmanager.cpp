@@ -1,6 +1,7 @@
 #include "scriptmanager.h"
 #include "windowmanager.h"
 #include "common.h"
+#include "debug.h"
 
 #include "opencv/opencv.h"
 
@@ -10,10 +11,13 @@
 
 Q_DECLARE_METATYPE(Mat)
 
+ScriptManager * ScriptManager::inst = NULL;
+
 static void addQObject(QScriptEngine *e, QObject *obj, const QString &oname)
 {
 	QScriptValue iv = e->newQObject(obj);
 	e->globalObject().setProperty(oname, iv);
+	ffDebug() << oname << obj;
 }
 
 class ScriptManagerPriv
@@ -51,6 +55,7 @@ ScriptManager::ScriptManager(QObject *parent) :
 	QObject(parent),
 	p(new ScriptManagerPriv)
 {
+	inst = this;
 }
 
 void ScriptManager::setScriptEngine(QScriptEngine *eng)
