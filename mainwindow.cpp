@@ -25,12 +25,6 @@
 #include <QDesktopWidget>
 #include <QStringListModel>
 
-static void addQObject(QScriptEngine &e, QObject *obj, const QString &oname)
-{
-	QScriptValue iv = e.newQObject(obj);
-	e.globalObject().setProperty(oname, iv);
-}
-
 static const QStringList getObjectCompletions(const QMetaObject &obj)
 {
 	QStringList methods;
@@ -52,11 +46,9 @@ public:
 	}
 
 	ScriptEdit *edit;
-	DatasetManager *dm;
-	QScriptEngine eng;
-	Pyramids *pyr;
+
 	QSettings sets;
-	WindowManager wm;
+
 	ScriptManager sm;
 };
 
@@ -80,39 +72,17 @@ MainWindow::MainWindow(QWidget *parent) :
 	ui->frameScript->layout()->addWidget(p->edit);
 	connect(p->edit, SIGNAL(newEvaluation(QString)), SLOT(scriptTextChanged(QString)));
 
-	p->dm = new DatasetManager(this);
-
-	p->pyr = new Pyramids(this);
-
-	p->sm.setScriptEngine(&p->eng);
-	p->sm.setWindowManager(&p->wm);
-
-	addScriptObject(p->dm, "dm");
-	addScriptObject(p->pyr, "pyr");
-	addScriptObject(&p->wm, "wm");
-	addScriptObject(&p->sm, "sm");
-
-	/* find completions */
-	QHashIterator<QString, QObject *> i(scriptObjects);
-	while (i.hasNext()) {
-		i.next();
-		QObject *obj = i.value();
-		const QMetaObject *mobj = obj->metaObject();
-		QStringList methods;
-		for (int j = mobj->methodOffset(); j < mobj->methodCount(); j++) {
-			if (mobj->method(j).methodType() == QMetaMethod::Slot ||
-					mobj->method(j).methodType() == QMetaMethod::Method)
-				methods << QString::fromLatin1(mobj->method(j).methodSignature());
-		}
-		if (methods.size())
-			p->edit->insertCompletion(i.key(), methods);
-		addQObject(p->eng, i.value(), i.key());
-	}
 	p->edit->insertCompletion("iw", getObjectCompletions(ImageWidget::staticMetaObject));
 	p->edit->insertCompletion("cv", getObjectCompletions(OpenCV::staticMetaObject));
 	p->edit->insertCompletion("cmn", getObjectCompletions(Common::staticMetaObject));
+	p->edit->insertCompletion("dm", getObjectCompletions(DatasetManager::staticMetaObject));
+	p->edit->insertCompletion("pyr", getObjectCompletions(Pyramids::staticMetaObject));
+	p->edit->insertCompletion("wm", getObjectCompletions(WindowManager::staticMetaObject));
+	p->edit->insertCompletion("sm", getObjectCompletions(ScriptManager::staticMetaObject));
 
-	evaluateScript(p->sets.value("autostart").toString());
+	p->sm.evaluateScript(p->sets.value("autostart").toString());
+	activateWindow();
+	p->edit->setFocus();
 }
 
 MainWindow::~MainWindow()
@@ -123,7 +93,9 @@ MainWindow::~MainWindow()
 void MainWindow::on_pushEvaluate_clicked()
 {
 	QString str = ui->textBatch->toPlainText();
-	evaluateScript(str);
+	p->sm.evaluateScript(str);
+	activateWindow();
+	p->edit->setFocus();
 }
 
 void MainWindow::scriptTextChanged(const QString &text)
@@ -134,19 +106,7 @@ void MainWindow::scriptTextChanged(const QString &text)
 	h << text;
 	p->sets.setValue("history", h);
 	ui->listHistory->addItem(text);
-	evaluateScript(text);
-}
-
-void MainWindow::addScriptObject(QObject *obj, const QString &name)
-{
-	scriptObjects.insert(name, obj);
-}
-
-void MainWindow::evaluateScript(const QString &text)
-{
-	p->eng.evaluate(text);
-	if (p->eng.hasUncaughtException())
-		ffDebug() << p->eng.uncaughtExceptionLineNumber() << p->eng.uncaughtException().toString();
+	p->sm.evaluateScript(text);
 	activateWindow();
 	p->edit->setFocus();
 }
@@ -175,7 +135,9 @@ void MainWindow::on_actionScripts_Editor_triggered()
 	while (w.isVisible())
 		QApplication::processEvents();
 	if (!w.runText.isEmpty())
-		evaluateScript(w.runText);
+		p->sm.evaluateScript(w.runText);
+	activateWindow();
+	p->edit->setFocus();
 }
 
 void MainWindow::closeEvent(QCloseEvent *ev)

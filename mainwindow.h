@@ -30,13 +30,10 @@ private slots:
 
 protected:
 	void closeEvent(QCloseEvent *);
-	void addScriptObject(QObject *obj, const QString &name);
-	void evaluateScript(const QString &text);
 
 private:
 	Ui::MainWindow *ui;
 	MainWindowPriv *p;
-	QHash<QString, QObject *> scriptObjects;
 };
 
 #endif // MAINWINDOW_H
