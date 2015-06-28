@@ -103,7 +103,7 @@ void Pyramids::createDictionary(int clusterCount)
 	dict = clusterFeatures(OpenCV::subSampleRandom(imageFeatures, clusterCount * 100), clusterCount);
 }
 
-void Pyramids::computeImageFeatures(const QStringList &images)
+void Pyramids::computeImageFeatures(const QStringList &images, int samplesPerImage)
 {
 	Mat features(0, 128, CV_32F);
 	for (int i = 0; i < images.size(); i++) {
@@ -111,22 +111,39 @@ void Pyramids::computeImageFeatures(const QStringList &images)
 		Mat img = OpenCV::loadImage(images[i]);
 		vector<KeyPoint> kpts = extractKeypoints(img);
 		Mat fts = computeFeatures(img, kpts);
-		features.push_back(fts);
+		if (samplesPerImage <= 0)
+			features.push_back(fts);
+		else
+			features.push_back(OpenCV::subSampleRandom(fts, samplesPerImage));
 	}
 	imageFeatures = features;
 }
 
-Mat Pyramids::makeSpm(const QString &filename, int L)
+Mat Pyramids::calculatePyramids(const QStringList &images, int L, int step)
+{
+	int size = images.size();
+	Mat pyramids(size, makeSpm(images.first(), L, step).cols, CV_32F);
+	#pragma omp parallel for
+	for (int i = 0; i < size; i++) {
+		QString iname = images[i];
+		const Mat m = makeSpm(iname, L, step);
+		m.copyTo(pyramids.row(i));
+		ffDebug() << i << size;
+	}
+	return pyramids;
+}
+
+Mat Pyramids::makeSpm(const QString &filename, int L, int step)
 {
 	if (!QFile::exists(filename))
 		return Mat();
 	if (!dict.rows)
 		return Mat();
 	Mat im(imread(qPrintable(filename), IMREAD_GRAYSCALE));
-	return makeSpmFromMat(im, L);
+	return makeSpmFromMat(im, L, step);
 }
 
-Mat Pyramids::makeSpmFromMat(const Mat &im, int L)
+Mat Pyramids::makeSpmFromMat(const Mat &im, int L, int step)
 {
 	int imW = im.cols;
 	int imH = im.rows;
@@ -138,7 +155,10 @@ Mat Pyramids::makeSpmFromMat(const Mat &im, int L)
 	vector<KeyPoint> keypoints;
 	Mat features;
 	SIFT dec;
-	dec.detect(im, keypoints);
+	if (step <= 0)
+		dec.detect(im, keypoints);
+	else
+		keypoints = extractDenseKeypoints(im, step);
 	dec.compute(im, keypoints, features);
 
 	std::vector<DMatch> matches;
@@ -148,7 +168,8 @@ Mat Pyramids::makeSpmFromMat(const Mat &im, int L)
 	/* calculate histogram values using matches and keypoints */
 	for (uint i = 0; i < matches.size(); i++) {
 		int idx = matches[i].trainIdx;
-		const KeyPoint kpt = keypoints.at(i);
+		int kid = matches[i].queryIdx;
+		const KeyPoint kpt = keypoints.at(kid);
 		Mat cont = findPointContributions(kpt.pt.x, kpt.pt.y, L, imW, imH);
 		for (int j = 0; j < cont.rows; j++)
 			hists.at<float>(cont.at<float>(j), idx) += 1;
@@ -181,6 +202,11 @@ Mat Pyramids::getDict()
 Mat Pyramids::getImageFeatures()
 {
 	return imageFeatures;
+}
+
+void Pyramids::setImageFeatures(const Mat &features)
+{
+	imageFeatures = features;
 }
 
 Mat Pyramids::makeHistImage(const Mat &hist, int scale, int foreColor, int backColor)

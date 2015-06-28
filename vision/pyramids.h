@@ -25,15 +25,17 @@ public slots:
 
 	void createDictionary(const QStringList &images, int clusterCount);
 	void createDictionary(int clusterCount);
-	void computeImageFeatures(const QStringList &images);
+	void computeImageFeatures(const QStringList &images, int samplesPerImage = -1);
+	Mat calculatePyramids(const QStringList &images, int L, int step);
 
-	Mat makeSpm(const QString &filename, int L);
-	Mat makeSpmFromMat(const Mat &im, int L);
+	Mat makeSpm(const QString &filename, int L, int step = -1);
+	Mat makeSpmFromMat(const Mat &im, int L, int step = -1);
 	Mat makeHistImage(const Mat &hist, int scale = 0, int foreColor = Qt::white, int backColor = Qt::black);
 	void setDict(const QString &filename);
 	void setDict(const Mat &codewords);
 	Mat getDict();
 	Mat getImageFeatures();
+	void setImageFeatures(const Mat &features);
 
 protected:
 	Mat dict;
