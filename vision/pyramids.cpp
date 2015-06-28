@@ -155,7 +155,7 @@ Mat Pyramids::makeSpmFromMat(const Mat &im, int L)
 	}
 
 	/* normalize histogram */
-	linear /= keypoints.size();
+	linear /= keypoints.size() * binCount;
 
 	return linear;
 }
