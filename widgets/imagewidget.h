@@ -21,6 +21,8 @@ public:
 signals:
 
 public slots:
+	void addText(const QString &text);
+	void clearText();
 	void setCurrentCell(int row, int col);
 	void showImageMat(const Mat &image);
 	void showImage(const QString &filename);

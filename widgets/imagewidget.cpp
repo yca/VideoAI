@@ -2,10 +2,7 @@
 #include "debug.h"
 
 #include <QPainter>
-
-/*
-pyr.setDict("/home/amenmd/myfs/tasks/hilal_tez/work/ox_complete/oxbuild_images_512.dict"); spm = pyr.makeSpm(dm.getImage(0), 0); spmi = pyr.makeHistImage(spm); iw.showImageMat(spmi);
-*/
+#include <QFontMetrics>
 
 class ImageWidgetGridItem {
 public:
@@ -30,16 +27,35 @@ public:
 	void draw(QPainter *p, QRect r)
 	{
 		p->drawImage(r, im);
+
+		/* draw OSD */
+		if (osd.size()) {
+			p->setFont(QFont("Arial", 12));
+			p->setBrush(QBrush(Qt::yellow));
+			p->setPen(QPen(Qt::yellow));
+			/*QFontMetrics fm(p->font(), p->device());
+			QRectF rf;
+			rf.setX(r.x());
+			rf.setY(r.y());
+			rf.setHeight(fm.height() * osd.size());
+			int max = 0;
+			foreach (QString l, osd)
+				if (fm.width(l) > max)
+					max = fm.width(l);
+			rf.setWidth(max);*/
+			p->drawText(r, osd.join("\n"));
+		}
 	}
 	void draw(QPainter *p)
 	{
-		p->drawImage(rect, im);
+		draw(p, rect);
 	}
 
 	QImage im;
 	Mat imgSource;
 	ScaleMode mode;
 	QRect rect;
+	QStringList osd;
 };
 
 ImageWidget::ImageWidget(QWidget *parent) :
@@ -70,6 +86,16 @@ ImageWidget::~ImageWidget()
 {
 	qDeleteAll(grid);
 	grid.clear();
+}
+
+void ImageWidget::addText(const QString &text)
+{
+	grid[curr]->osd << text;
+}
+
+void ImageWidget::clearText()
+{
+	grid[curr]->osd.clear();
 }
 
 void ImageWidget::setCurrentCell(int row, int col)
