@@ -23,7 +23,6 @@ static void addQObject(QScriptEngine *e, QObject *obj, const QString &oname)
 {
 	QScriptValue iv = e->newQObject(obj);
 	e->globalObject().setProperty(oname, iv);
-	ffDebug() << oname << obj;
 }
 
 class ScriptManagerPriv
