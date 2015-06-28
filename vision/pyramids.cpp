@@ -154,7 +154,8 @@ Mat Pyramids::makeSpmFromMat(const Mat &im, int L, int step)
 	/* calculate histogram values using matches and keypoints */
 	for (uint i = 0; i < matches.size(); i++) {
 		int idx = matches[i].trainIdx;
-		const KeyPoint kpt = keypoints.at(i);
+		int kid = matches[i].queryIdx;
+		const KeyPoint kpt = keypoints.at(kid);
 		Mat cont = findPointContributions(kpt.pt.x, kpt.pt.y, L, imW, imH);
 		for (int j = 0; j < cont.rows; j++)
 			hists.at<float>(cont.at<float>(j), idx) += 1;
