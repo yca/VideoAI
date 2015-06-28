@@ -29,9 +29,28 @@ static const QStringList getObjectCompletions(const QMetaObject &obj)
 {
 	QStringList methods;
 	for (int j = obj.methodOffset(); j < obj.methodCount(); j++) {
-		if (obj.method(j).methodType() == QMetaMethod::Slot ||
-				obj.method(j).methodType() == QMetaMethod::Method)
-			methods << QString::fromLatin1(obj.method(j).methodSignature());
+		const QMetaMethod  &m = obj.method(j);
+		if (m.methodType() == QMetaMethod::Slot ||
+				m.methodType() == QMetaMethod::Method) {
+			QString sgn = QString::fromLatin1(m.methodSignature());
+			QStringList part;
+			foreach (QByteArray ba, m.parameterTypes())
+				part << QString::fromLatin1(ba);
+			QStringList parn;
+			foreach (QByteArray ba, m.parameterNames())
+				parn << QString::fromLatin1(ba);
+			QString name = QString::fromLatin1(m.name());
+			QString pars;
+			for (int i = 0; i < part.size(); i++) {
+				pars.append(part[i]);
+				pars.append(" ");
+				pars.append(parn[i]);
+				if (i < part.size() - 1)
+					pars.append(", ");
+			}
+			QString method = QString("%1(%2);").arg(name).arg(pars);
+			methods << method;
+		}
 	}
 	return methods;
 }
@@ -83,6 +102,8 @@ MainWindow::MainWindow(QWidget *parent) :
 	p->sm.evaluateScript(p->sets.value("autostart").toString());
 	activateWindow();
 	p->edit->setFocus();
+
+	ui->textBatch->setPlainText(p->sets.value("batchCommands").toString());
 }
 
 MainWindow::~MainWindow()
@@ -142,6 +163,8 @@ void MainWindow::on_actionScripts_Editor_triggered()
 
 void MainWindow::closeEvent(QCloseEvent *ev)
 {
+	p->sets.setValue("batchCommands", ui->textBatch->toPlainText());
+	p->sets.sync();
 	QMainWindow::closeEvent(ev);
 	ev->accept();
 	QApplication::closeAllWindows();
