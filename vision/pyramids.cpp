@@ -2,7 +2,6 @@
 #include "debug.h"
 
 #include <opencv2/opencv.hpp>
-#include <opencv2/features2d/features2d.hpp>
 #if CV_MAJOR_VERSION > 2
 #include <opencv2/xfeatures2d/nonfree.hpp>
 #else
@@ -11,6 +10,7 @@
 #if CV_MAJOR_VERSION > 2
 using namespace xfeatures2d;
 #endif
+#include <opencv2/flann/flann.hpp>
 
 #include "opencv/opencv.h"
 
@@ -57,6 +57,63 @@ static Mat findPointContributions(int x, int y, int level, int width, int height
 Pyramids::Pyramids(QObject *parent) :
 	QObject(parent)
 {
+}
+
+vector<KeyPoint> Pyramids::extractDenseKeypoints(const Mat &m, int step)
+{
+	vector<KeyPoint> keypoints;
+	DenseFeatureDetector dec(11.f, 1, 0.1f, step, 0);
+	dec.detect(m, keypoints);
+	return keypoints;
+}
+
+vector<KeyPoint> Pyramids::extractKeypoints(const Mat &m)
+{
+	vector<KeyPoint> keypoints;
+	SiftFeatureDetector dec;
+	dec.detect(m, keypoints);
+	return keypoints;
+}
+
+Mat Pyramids::computeFeatures(const Mat &m, vector<KeyPoint> &keypoints)
+{
+	Mat features;
+	SiftDescriptorExtractor ex;
+	ex.compute(m, keypoints, features);
+	return features;
+}
+
+Mat Pyramids::clusterFeatures(const Mat &features, int clusterCount)
+{
+	fDebug("will cluster %d features", features.rows);
+	const cvflann::KMeansIndexParams p;
+	Mat centers(clusterCount, features.cols, CV_32F);
+	int ccnt = cv::flann::hierarchicalClustering<flann::L2<float> >(features, centers, p);
+	return centers.rowRange(Range(0, ccnt));
+}
+
+void Pyramids::createDictionary(const QStringList &images, int clusterCount)
+{
+	computeImageFeatures(images);
+	dict = clusterFeatures(OpenCV::subSampleRandom(imageFeatures, clusterCount * 100), clusterCount);
+}
+
+void Pyramids::createDictionary(int clusterCount)
+{
+	dict = clusterFeatures(OpenCV::subSampleRandom(imageFeatures, clusterCount * 100), clusterCount);
+}
+
+void Pyramids::computeImageFeatures(const QStringList &images)
+{
+	Mat features(0, 128, CV_32F);
+	for (int i = 0; i < images.size(); i++) {
+		mDebug("Processing %s, %d of %d", qPrintable(images[i]), i, images.size());
+		Mat img = OpenCV::loadImage(images[i]);
+		vector<KeyPoint> kpts = extractKeypoints(img);
+		Mat fts = computeFeatures(img, kpts);
+		features.push_back(fts);
+	}
+	imageFeatures = features;
 }
 
 Mat Pyramids::makeSpm(const QString &filename, int L)
@@ -114,6 +171,16 @@ void Pyramids::setDict(const Mat &codewords)
 	matcher->clear();
 	matcher->add(std::vector<Mat>(1, dict));
 	}
+}
+
+Mat Pyramids::getDict()
+{
+	return dict;
+}
+
+Mat Pyramids::getImageFeatures()
+{
+	return imageFeatures;
 }
 
 Mat Pyramids::makeHistImage(const Mat &hist, int scale, int foreColor, int backColor)
