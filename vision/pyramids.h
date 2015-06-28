@@ -26,6 +26,7 @@ public slots:
 	void createDictionary(const QStringList &images, int clusterCount);
 	void createDictionary(int clusterCount);
 	void computeImageFeatures(const QStringList &images, int samplesPerImage = -1);
+	Mat calculatePyramids(const QStringList &images, int L, int step);
 
 	Mat makeSpm(const QString &filename, int L, int step = -1);
 	Mat makeSpmFromMat(const Mat &im, int L, int step = -1);

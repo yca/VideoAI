@@ -111,12 +111,26 @@ void Pyramids::computeImageFeatures(const QStringList &images, int samplesPerIma
 		Mat img = OpenCV::loadImage(images[i]);
 		vector<KeyPoint> kpts = extractKeypoints(img);
 		Mat fts = computeFeatures(img, kpts);
-		if (samplesPerClass <= 0)
+		if (samplesPerImage <= 0)
 			features.push_back(fts);
 		else
 			features.push_back(OpenCV::subSampleRandom(fts, samplesPerImage));
 	}
 	imageFeatures = features;
+}
+
+Mat Pyramids::calculatePyramids(const QStringList &images, int L, int step)
+{
+	int size = images.size();
+	Mat pyramids(size, makeSpm(images.first(), L, step).cols, CV_32F);
+	#pragma omp parallel for
+	for (int i = 0; i < size; i++) {
+		QString iname = images[i];
+		const Mat m = makeSpm(iname, L, step);
+		m.copyTo(pyramids.row(i));
+		ffDebug() << i << size;
+	}
+	return pyramids;
 }
 
 Mat Pyramids::makeSpm(const QString &filename, int L, int step)

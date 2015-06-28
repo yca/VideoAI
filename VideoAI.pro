@@ -27,7 +27,9 @@ SOURCES += main.cpp\
     windowmanager.cpp \
     scriptmanager.cpp \
     common.cpp \
-    widgets/userscriptwidget.cpp
+    widgets/userscriptwidget.cpp \
+    vlfeat/vlfeat.cpp \
+    snippets.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -42,7 +44,9 @@ HEADERS  += mainwindow.h \
     windowmanager.h \
     scriptmanager.h \
     common.h \
-    widgets/userscriptwidget.h
+    widgets/userscriptwidget.h \
+    vlfeat/vlfeat.h \
+    snippets.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
@@ -50,7 +54,7 @@ FORMS    += mainwindow.ui \
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 openmp
+CONFIG += opencv2 openmp vlfeat
 
 opencv2 {
     INCLUDEPATH += /usr/include/opencv
@@ -88,4 +92,10 @@ opencv3 {
 openmp {
     QMAKE_CXXFLAGS += -fopenmp
     LIBS += -fopenmp
+}
+
+vlfeat {
+    DEFINES += HAVE_VLFEAT
+    INCLUDEPATH += /home/amenmd/myfs/source-codes/oss/vlfeat/
+    LIBS += -L/home/amenmd/myfs/source-codes/oss/vlfeat/bin/glnxa64/ -lvl
 }

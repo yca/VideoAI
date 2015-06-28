@@ -145,3 +145,36 @@ Mat OpenCV::subSampleRandom(const Mat &m, int count)
 	}
 	return sub;
 }
+
+Mat OpenCV::createRandomized(int start, int size)
+{
+	Mat m(size, 1, CV_32F);
+	QList<int> list;
+	for (int i = start; i < start + size; i++)
+		list << i;
+	srand(time(NULL));
+	for (int i = 0; i < m.rows; i++)
+		m.at<float>(i) = list.takeAt(rand() % list.size());
+	return m;
+}
+
+bool OpenCV::matContains(const Mat &m, int val)
+{
+	for (int i = 0; i < m.rows; i++)
+		if (m.at<float>(i) == val)
+			return true;
+	return false;
+}
+
+QString OpenCV::toSvmLine(const Mat &spm, int label)
+{
+	QString line;
+	for (int i = 0; i < spm.rows; i++) {
+		line += QString("%1 ").arg(label);
+		for (int j = 0; j < spm.cols; j++) {
+			line += QString("%1:%2 ").arg(j + 1).arg(spm.at<float>(i, j));
+		}
+		line.append("\n");
+	}
+	return line;
+}

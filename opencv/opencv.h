@@ -32,6 +32,9 @@ public slots:
 	static Mat importMatrix(QString filename);
 	static int exportMatrixTxt(const QString &filename, const Mat &m);
 	static Mat subSampleRandom(const Mat &m, int count);
+	static Mat createRandomized(int start, int size);
+	static bool matContains(const Mat &m, int val);
+	static QString toSvmLine(const Mat &spm, int label);
 protected:
 	Mat refMat;
 };
