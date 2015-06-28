@@ -134,7 +134,7 @@ Mat OpenCV::subSampleRandom(const Mat &m, int count)
 {
 	if (count > m.rows)
 		return m;
-	Mat sub(count, m.cols, CV_32F);
+	Mat sub(0, m.cols, CV_32F);
 	QList<int> l;
 	for (int i = 0; i < count; i++)
 		l << i;
