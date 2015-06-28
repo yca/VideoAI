@@ -20,6 +20,10 @@ public:
 signals:
 
 public slots:
+	static float getL1Norm(const Mat &m1);
+	static float getL2Norm(const Mat &m1);
+	static float getL1Norm(const Mat &m1, const Mat &m2);
+	static float getL2Norm(const Mat &m1, const Mat &m2);
 	static Mat blendImages(const Mat &im1, const Mat &im2, double alpha = 0.5, double beta = 0.5);
 	static void saveImage(const QString &filename, const Mat &m);
 	static Mat loadImage(const QString &filename);
@@ -27,6 +31,7 @@ public slots:
 	static int exportMatrix(QString filename, const Mat &m);
 	static Mat importMatrix(QString filename);
 	static int exportMatrixTxt(const QString &filename, const Mat &m);
+	static Mat subSampleRandom(const Mat &m, int count);
 protected:
 	Mat refMat;
 };

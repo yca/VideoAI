@@ -24,6 +24,26 @@ OpenCV::~OpenCV()
 	qDebug("deleting my object");
 }
 
+float OpenCV::getL1Norm(const Mat &m1)
+{
+	return norm(m1, NORM_L1);
+}
+
+float OpenCV::getL2Norm(const Mat &m1)
+{
+	return norm(m1, NORM_L2);
+}
+
+float OpenCV::getL1Norm(const Mat &m1, const Mat &m2)
+{
+	return normL1_((float *)m1.data, (float *)m2.data, m1.cols * m1.rows);
+}
+
+float OpenCV::getL2Norm(const Mat &m1, const Mat &m2)
+{
+	return normL2Sqr_((float *)m1.data, (float *)m2.data, m1.cols * m1.rows);
+}
+
 Mat OpenCV::blendImages(const Mat &im1, const Mat &im2, double alpha, double beta)
 {
 	Mat dst;
@@ -108,4 +128,20 @@ int OpenCV::exportMatrixTxt(const QString &filename, const Mat &m)
 	}
 	f.close();
 	return 0;
+}
+
+Mat OpenCV::subSampleRandom(const Mat &m, int count)
+{
+	if (count > m.rows)
+		return m;
+	Mat sub(count, m.cols, CV_32F);
+	QList<int> l;
+	for (int i = 0; i < count; i++)
+		l << i;
+	srand(time(NULL));
+	while (l.size()) {
+		int ind = rand() % l.size();
+		sub.push_back(m.row(l.takeAt(ind)));
+	}
+	return sub;
 }
