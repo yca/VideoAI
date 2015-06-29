@@ -20,6 +20,8 @@ public slots:
 	QStringList dataSetImages(const QString &dataset);
 	QString getImage(int pos);
 
+	static QList<QPair<int, QString> > voc2007GetImagesForCateogory(const QString &path, QString key, QString cat);
+
 protected:
 	QString currentDataset;
 	QHash<QString, QStringList> datasets;

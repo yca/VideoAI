@@ -1,4 +1,5 @@
 #include "datasetmanager.h"
+#include "common.h"
 
 #include <QDir>
 
@@ -55,4 +56,35 @@ QStringList DatasetManager::dataSetImages(const QString &dataset)
 QString DatasetManager::getImage(int pos)
 {
 	return datasets[currentDataset][pos];
+}
+
+QList<QPair<int, QString> > DatasetManager::voc2007GetImagesForCateogory(const QString &path, QString key, QString cat)
+{
+	QDir d(path + "/JPEGImages");
+	QStringList files = d.entryList(QStringList() << QString("*.jpg")
+									, QDir::NoDotAndDotDot | QDir::Files, QDir::Name);
+	QHash<int, QString> fhash;
+	foreach (QString file, files) {
+		int no = file.split(".jpg").first().toInt();
+		fhash.insert(no, d.filePath(file));
+	}
+
+	d.setPath(path + "/ImageSets/Main");
+	files = d.entryList(QStringList() << QString("*.txt")
+									, QDir::NoDotAndDotDot | QDir::Files, QDir::Name);
+	QList<QPair<int, QString> > images;
+	foreach (QString file, files) {
+		if (file != QString("%1_%2.txt").arg(cat).arg(key))
+			continue;
+		QStringList lines = Common::importText(d.filePath(file));
+		foreach (QString line, lines) {
+			line = line.trimmed();
+			if (!line.contains(" "))
+				continue;
+			QStringList vals = line.split(" ", QString::SkipEmptyParts);
+			images << QPair<int, QString>(vals[1].toInt(), fhash[vals[0].toInt()]);
+		}
+		break;
+	}
+	return images;
 }
