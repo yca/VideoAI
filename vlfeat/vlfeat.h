@@ -19,8 +19,8 @@ class VlFeat : public QObject
 public:
 	explicit VlFeat(QObject *parent = 0);
 
-	static QString toSvmLine(VlHomogeneousKernelMap *map, const Mat &spm, int label);
-	static void exportToSvm(const Mat &pyramids, const Mat &labels, const QString &filename);
+	static QString toSvmLine(VlHomogeneousKernelMap *map, const Mat &spm, int label, bool dense = false);
+	static void exportToSvm(const Mat &pyramids, const Mat &labels, const QString &filename, bool dense = false);
 signals:
 
 public slots:
