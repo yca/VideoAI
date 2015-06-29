@@ -80,12 +80,20 @@ int OpenCV::exportMatrix(QString filename, const Mat &m)
 	f.open(QIODevice::WriteOnly);
 	QDataStream out(&f);
 	out.setByteOrder(QDataStream::LittleEndian);
-	out << (int)1;
+	out << (int)2;
 	out << m.dims;
 	out << m.rows;
 	out << m.cols;
 	out << m.type();
-	out.writeBytes((const char *)m.data, m.rows * m.cols * m.elemSize());
+	quint64 len = (quint64)m.rows * m.cols * m.elemSize();
+	out << len;
+	uint bs = 1024 * 1024 * 1024;
+	quint64 off = 0;
+	while(len > 0) {
+		int res = out.writeRawData((const char *)m.data + off, len < bs ? len : bs);
+		len -= res;
+		off += res;
+	}
 	f.close();
 	return 0;
 }
@@ -102,14 +110,25 @@ Mat OpenCV::importMatrix(QString filename)
 	int cols; in >> cols;
 	int type; in >> type;
 	Mat m(rows, cols, type);
-	char *data;
-	uint l;
-	in.readBytes(data, l);
-	if (l != rows * cols * m.elemSize()) {
-		fDebug("error in data length: exptected=%d got=%d", uint(rows * cols * m.elemSize()), l);
+	if (size == 1) {
+		char *data;
+		uint l;
+		in.readBytes(data, l);
+		if (l != rows * cols * m.elemSize()) {
+			fDebug("error in data length: exptected=%d got=%d", uint(rows * cols * m.elemSize()), l);
+		}
+		memcpy(m.data, data, l);
+		delete []data;
+	} else {
+		quint64 len; in >> len;
+		uint bs = 1024 * 1024 * 1024;
+		quint64 off = 0;
+		while(len > 0) {
+			int res = in.readRawData((char *)m.data + off, len < bs ? len : bs);
+			len -= res;
+			off += res;
+		}
 	}
-	memcpy(m.data, data, l);
-	delete []data;
 	return m;
 }
 
