@@ -96,6 +96,6 @@ openmp {
 
 vlfeat {
     DEFINES += HAVE_VLFEAT
-    INCLUDEPATH += /home/amenmd/myfs/source-codes/oss/vlfeat/
-    LIBS += -L/home/amenmd/myfs/source-codes/oss/vlfeat/bin/glnxa64/ -lvl
+    INCLUDEPATH += /home/caglar/myfs/tasks/video_analysis/vlfeat
+    LIBS += -L/home/caglar/myfs/tasks/video_analysis/vlfeat/bin/glnxa64/ -lvl
 }
