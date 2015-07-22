@@ -84,4 +84,5 @@ void VlFeat::exportToSvm(const Mat &pyramids, const Mat &labels, const QString &
 		//qDebug() << "%" << i * 100.0 / pyramids.rows;
 	}
 	f2.close();
+	vl_homogeneouskernelmap_delete(map);
 }
