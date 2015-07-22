@@ -39,6 +39,24 @@ void Snippets::voc2007()
 	OpenCV::exportMatrix("data/pyramids_5000_L2_s2.dat", pyramids);
 }
 
+static void exportPyramidsForSvm(const QStringList &images, const Mat &pyramids, const QList<QPair<int, QString> > &list, const QString &output)
+{
+	Mat all(0, pyramids.cols, CV_32F);
+	Mat labels = Mat::ones(list.size(), 1, CV_32F);
+	for (int i = 0; i < list.size(); i++) {
+		QPair<int, QString> p = list[i];
+		QString str = p.second.replace("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007", "/home/caglar/myfs/tasks/video_analysis/data/vocimages");
+		int row = images.indexOf(str);
+		assert(row >= 0);
+		all.push_back(pyramids.row(row));
+		if (p.first > 0)
+			labels.at<float>(i) = 1;
+		else
+			labels.at<float>(i) = -1;
+	}
+	VlFeat::exportToSvm(all, labels, output);
+}
+
 void Snippets::vocpyr2linearsvm()
 {
 	srand(time(NULL));
@@ -70,45 +88,16 @@ void Snippets::vocpyr2linearsvm()
 		<< "train"
 		<< "tvmonitor";
 
+
 	foreach (QString cat, cats) {
 		fDebug("Processing %s", qPrintable(cat));
 		out.mkdir(cat);
 		/* training data */
 		QList<QPair<int, QString> > list = dm->voc2007GetImagesForCateogory("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007", "trainval", cat);
-		Mat pos(0, pyramids.cols, CV_32F);
-		Mat neg(0, pyramids.cols, CV_32F);
-		for (int i = 0; i < list.size(); i++) {
-			QPair<int, QString> p = list[i];
-			QString str = p.second.replace("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007", "/home/caglar/myfs/tasks/video_analysis/data/vocimages");
-			int row = images.indexOf(str);
-			assert(row >= 0);
-			if (p.first > 0)
-				pos.push_back(pyramids.row(row));
-			else
-				neg.push_back(pyramids.row(row));
-		}
-		neg = OpenCV::subSampleRandom(neg, pos.rows);
-		Mat labelsPos = Mat::ones(pos.rows, 1, CV_32F);
-		Mat labelsNeg = Mat::ones(neg.rows, 1, CV_32F) * -1;
-		vconcat(labelsPos, labelsNeg, labelsPos);
-		vconcat(pos, neg, pos);
-		VlFeat::exportToSvm(pos, labelsPos, QString("vocsvm/%1/svm_train.txt").arg(cat));
+		exportPyramidsForSvm(images, pyramids, list, QString("vocsvm/%1/svm_train.txt").arg(cat));
 		/* testing data */
 		list = dm->voc2007GetImagesForCateogory("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007", "test", cat);
-		Mat all(0, pyramids.cols, CV_32F);
-		Mat labels = Mat::ones(list.size(), 1, CV_32F);
-		for (int i = 0; i < list.size(); i++) {
-			QPair<int, QString> p = list[i];
-			QString str = p.second.replace("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007", "/home/caglar/myfs/tasks/video_analysis/data/vocimages");
-			int row = images.indexOf(str);
-			assert(row >= 0);
-			all.push_back(pyramids.row(row));
-			if (p.first > 0)
-				labels.at<float>(i) = 1;
-			else
-				labels.at<float>(i) = -1;
-		}
-		VlFeat::exportToSvm(all, labels, QString("vocsvm/%1/svm_test.txt").arg(cat));
+		exportPyramidsForSvm(images, pyramids, list, QString("vocsvm/%1/svm_test.txt").arg(cat));
 	}
 }
 
@@ -382,12 +371,7 @@ void Snippets::toVOCKit(const QString &path)
 		for (int i = 0; i < probs.size(); i++) {
 			QString id = list[i].second.split("/").last().remove(".jpg");
 			float pr = probs[i].first();
-			/*if (list[i].first < 0)
-				lines << QString("%1 %2").arg(id).arg(0);
-			else
-				lines << QString("%1 %2").arg(id).arg(1);*/
-			//lines << QString("%1 %2").arg(id).arg(pr);
-			lines << QString("%1 %2").arg(id).arg((rand() % 100) / 100.0);
+			lines << QString("%1 %2").arg(id).arg(pr);
 		}
 		Common::exportText(lines.join("\n"), QString("vocsvm/comp1_cls_test_%1.txt").arg(cat));
 	}
