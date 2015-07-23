@@ -29,7 +29,10 @@ SOURCES += main.cpp\
     common.cpp \
     widgets/userscriptwidget.cpp \
     vlfeat/vlfeat.cpp \
-    snippets.cpp
+    snippets.cpp \
+    svm/liblinear.cpp \
+    svm/linear.cpp \
+    svm/tron.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -46,7 +49,10 @@ HEADERS  += mainwindow.h \
     common.h \
     widgets/userscriptwidget.h \
     vlfeat/vlfeat.h \
-    snippets.h
+    snippets.h \
+    svm/liblinear.h \
+    svm/linear.h \
+    svm/tron.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
@@ -99,3 +105,5 @@ vlfeat {
     INCLUDEPATH += /home/caglar/myfs/tasks/video_analysis/vlfeat
     LIBS += -L/home/caglar/myfs/tasks/video_analysis/vlfeat/bin/glnxa64/ -lvl
 }
+
+LIBS += -lblas
