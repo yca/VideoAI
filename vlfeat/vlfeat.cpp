@@ -44,11 +44,11 @@ QString VlFeat::toSvmLine(VlHomogeneousKernelMap *map, const Mat &spm, int label
 	return line;
 }
 
-void VlFeat::exportToSvm(const Mat &pyramids, const Mat &labels, const QString &filename, bool dense)
+void VlFeat::exportToSvm(const Mat &pyramids, const Mat &labels, const QString &filename, double gamma, bool dense)
 {
 	QFile f2(filename);
 	f2.open(QIODevice::WriteOnly);
-	VlHomogeneousKernelMap *map = vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, 1, 1, -1, VlHomogeneousKernelMapWindowRectangular);
+	VlHomogeneousKernelMap *map = vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
 	float d[3];
 	for (int i = 0; i < pyramids.rows; i++) {
 		int label = labels.at<float>(i);
