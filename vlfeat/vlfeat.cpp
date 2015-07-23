@@ -1,5 +1,6 @@
 #include "vlfeat.h"
 #include "debug.h"
+#include "opencv/opencv.h"
 
 #include <QFile>
 
@@ -85,4 +86,20 @@ void VlFeat::exportToSvm(const Mat &pyramids, const Mat &labels, const QString &
 	}
 	f2.close();
 	vl_homogeneouskernelmap_delete(map);
+}
+
+Mat VlFeat::homKerMap(VlHomogeneousKernelMap *map, const Mat &m)
+{
+	Mat m2 = Mat(m.rows, m.cols * 3, m.type());
+	for (int i = 0; i < m.rows; i++) {
+		for (int j = 0; j < m.cols; j++) {
+			float d[3];
+			float val = m.at<float>(i, j);
+			vl_homogeneouskernelmap_evaluate_f(map, d, 1, val);
+			m2.at<float>(i, j * 3) = d[0];
+			m2.at<float>(i, j * 3 + 1) = d[1];
+			m2.at<float>(i, j * 3 + 2) = d[2];
+		}
+	}
+	return m2;
 }

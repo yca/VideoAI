@@ -21,6 +21,7 @@ public:
 
 	static QString toSvmLine(VlHomogeneousKernelMap *map, const Mat &spm, int label, bool dense = false);
 	static void exportToSvm(const Mat &pyramids, const Mat &labels, const QString &filename, double gamma, bool dense = false);
+	static Mat homKerMap(VlHomogeneousKernelMap *map, const Mat &m);
 signals:
 
 public slots:
