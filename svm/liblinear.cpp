@@ -102,7 +102,6 @@ int LibLinear::train()
 		return -ENODATA;
 	if (check_parameter(prob, pars))
 		return -EINVAL;
-	qDebug() << prob->l << prob->n << pars->C << pars->solver_type;
 	model = ::train(prob, pars);
 	return 0;
 }

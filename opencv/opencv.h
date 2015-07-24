@@ -30,6 +30,7 @@ public slots:
 	static void printMatInfo(const Mat &m);
 	static int exportMatrix(QString filename, const Mat &m);
 	static Mat importMatrix(QString filename);
+	static Mat importMatrixTxt(QString filename);
 	static int exportMatrixTxt(const QString &filename, const Mat &m);
 	static Mat subSampleRandom(const Mat &m, int count);
 	static Mat createRandomized(int start, int size);

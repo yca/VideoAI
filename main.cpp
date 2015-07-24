@@ -30,11 +30,29 @@ int main(int argc, char *argv[])
 {
 	qInstallMessageHandler(myMessageOutput);
 
-	//Snippets::voc2007();
-	//Snippets::vocpyr2linearsvm();
-	Snippets::toVOCKit("/home/caglar/myfs/source-codes/personal/build_x86/videoai/vocsvm/L2_5000_s8/");
+	int step = 0, L = 2, H = 0;
+	//Snippets::vocpyr2linearsvm("data/pyramids_5000_L2_s2.dat", "L2_5000_s2_np", 1);
+
+#ifdef minimized
+	Snippets::voc2007Min(step, L, H);
+	QString sub = QString("L%1_5000_s%2_h%3_min").arg(L).arg(step).arg(H);
+	QString pyramidData = QString("data/pyramids_min_5000_L%1H%2_s%3.dat").arg(L).arg(H).arg(step);
+	Snippets::vocTrain(pyramidData, sub, 1, 2.8);
+	Snippets::vocPredict(pyramidData, sub, 1);
+	Snippets::vocAP(sub);
+#else
+	Snippets::voc2007(step, L, H);
+	QString sub = QString("L%1_5000_s%2_h%3").arg(L).arg(step).arg(H);
+	QString pyramidData = QString("data/pyramids_5000_L%1H%2_s%3.dat").arg(L).arg(H).arg(step);
+	Snippets::vocTrain(pyramidData, sub, 1, 2.8);
+	Snippets::vocPredict(pyramidData, sub, 1);
+	Snippets::vocAP(sub);
+#endif
+	//Snippets::toVOCKit(QString("/home/caglar/myfs/source-codes/personal/build_x86/videoai/vocsvm/%1/").arg(sub));
+
 	//Snippets::caltech1();
 	//Snippets::pyr2linearsvm("data/svm_train.txt", "data/svm_test.txt");
+
 	return 0;
 
 	QApplication a(argc, argv);

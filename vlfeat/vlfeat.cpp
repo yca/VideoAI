@@ -50,15 +50,22 @@ void VlFeat::exportToSvm(const Mat &pyramids, const Mat &labels, const QString &
 	QFile f2(filename);
 	f2.open(QIODevice::WriteOnly);
 	VlHomogeneousKernelMap *map = vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
-	float d[3];
 	for (int i = 0; i < pyramids.rows; i++) {
 		int label = labels.at<float>(i);
 		QString line = QString("%1 ").arg(label);
 		const Mat &m = pyramids.row(i);
-		int curr = 1;
+		Mat m2 = Mat(1, m.cols * 3, m.type());
 		for (int j = 0; j < pyramids.cols; j++) {
+			float d[3];
 			float val = m.at<float>(0, j);
 			vl_homogeneouskernelmap_evaluate_f(map, d, 1, val);
+			m2.at<float>(0, j * 3) = d[0];
+			m2.at<float>(0, j * 3 + 1) = d[1];
+			m2.at<float>(0, j * 3 + 2) = d[2];
+		}
+		int curr = 1;
+		for (int j = 0; j < pyramids.cols; j++) {
+			float *d = &((float *)m2.row(0).data)[j * 3];
 			if (!dense) {
 				QString fts;
 				if (d[0] != 0)

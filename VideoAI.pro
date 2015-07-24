@@ -32,7 +32,8 @@ SOURCES += main.cpp\
     snippets.cpp \
     svm/liblinear.cpp \
     svm/linear.cpp \
-    svm/tron.cpp
+    svm/tron.cpp \
+    vision/pyramidsvl.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -52,7 +53,8 @@ HEADERS  += mainwindow.h \
     snippets.h \
     svm/liblinear.h \
     svm/linear.h \
-    svm/tron.h
+    svm/tron.h \
+    vision/pyramidsvl.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui

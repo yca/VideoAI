@@ -1,5 +1,6 @@
 #include "opencv.h"
 #include "debug.h"
+#include "common.h"
 
 #include <QFile>
 #include <QDataStream>
@@ -130,6 +131,23 @@ Mat OpenCV::importMatrix(QString filename)
 		}
 	}
 	return m;
+}
+
+Mat OpenCV::importMatrixTxt(QString filename)
+{
+	Mat data;
+	const QStringList lines = Common::importText(filename);
+	foreach (const QString &line, lines) {
+		QStringList vals = line.split(",");
+		if (data.cols == 0)
+			data = Mat(0, vals.size(), CV_32F);
+		Mat m(1, vals.size(), CV_32F);
+		for (int i = 0; i < vals.size(); i++)
+			m.at<float>(i) = vals[i].toFloat();
+		if (m.cols == data.cols)
+			data.push_back(m);
+	}
+	return data;
 }
 
 int OpenCV::exportMatrixTxt(const QString &filename, const Mat &m)

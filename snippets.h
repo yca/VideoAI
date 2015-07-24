@@ -16,8 +16,12 @@ signals:
 
 public slots:
 	static void caltech1();
-	static void voc2007();
-	static void vocpyr2linearsvm();
+	static void voc2007(int step, int L, int H);
+	static void voc2007Min(int step, int L, int H);
+	static void vocTrain(const QString &pyramidData, const QString &subFolder, double gamma, double cost);
+	static void vocPredict(const QString &pyramidData, const QString &subFolder, double gamma);
+	static void vocAP(const QString &subFolder);
+	static void vocpyr2linearsvm(const QString &pyramidData, const QString &subFolder, double gamma);
 	static void pyr2linearsvm(const QString &trainName, const QString &testName);
 	static void pyr2svm(DatasetManager *dm, const QString &trainName, const QString &testName);
 	static void oxfordTemp();

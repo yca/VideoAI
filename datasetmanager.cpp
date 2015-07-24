@@ -1,5 +1,6 @@
 #include "datasetmanager.h"
 #include "common.h"
+#include "debug.h"
 
 #include <QDir>
 
@@ -26,6 +27,22 @@ DatasetManager::DatasetManager(QObject *parent) :
 void DatasetManager::addDataset(const QString &name, const QString &path)
 {
 	QStringList images = listDir(path, "jpg");
+#if 0
+	images.clear();
+	QStringList lines = Common::importText("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007/ImageSets/Main/aeroplane_mintrain.txt");
+	foreach (QString line, lines) {
+		if (line.trimmed().isEmpty())
+			continue;
+		images << QString("/home/caglar/myfs/tasks/video_analysis/data/vocimages/JPEGImages/%1.jpg").arg(line.split(" ").first().trimmed());
+	}
+	lines = Common::importText("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007/ImageSets/Main/aeroplane_mintest.txt");
+	foreach (QString line, lines) {
+		if (line.trimmed().isEmpty())
+			continue;
+		images << QString("/home/caglar/myfs/tasks/video_analysis/data/vocimages/JPEGImages/%1.jpg").arg(line.split(" ").first().trimmed());
+	}
+	images.removeDuplicates();
+#endif
 	datasets.insert(name, images);
 	currentDataset = name;
 }
