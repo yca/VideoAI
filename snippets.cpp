@@ -1790,7 +1790,7 @@ void Snippets::oxfordPrepare()
 {
 	DatasetManager dm;
 	dm.addDataset("oxford", "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images/");
-	dm.convertOxfordFeatures();
+	dm.convertOxfordFeatures("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/");
 }
 
 void Snippets::oxfordMakePyramids()

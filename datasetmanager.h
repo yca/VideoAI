@@ -26,8 +26,8 @@ public slots:
 
 	static QList<QPair<int, QString> > voc2007GetImagesForCateogory(const QString &path, QString key, QString cat);
 	static void parseOxfordFeatures(const QString &path, const QString &ftPath, vector<vector<KeyPoint> > &kpts, vector<Mat> &features, vector<Mat> &ids);
-	static void checkOxfordMissing(const QStringList &images);
-	void convertOxfordFeatures();
+	static void checkOxfordMissing(const QStringList &images, const QString &featuresBase);
+	void convertOxfordFeatures(const QString &featuresBase);
 	void calculateOxfordIdfs(const QStringList &images, const QString ftPaths, int cols);
 
 protected:

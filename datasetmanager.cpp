@@ -24,6 +24,26 @@ DatasetManager::DatasetManager(QObject *parent) :
 	datasets.insert("sample", QStringList() << "testImage");
 }
 
+/**
+ * @brief createTestingSubset
+ * @param images
+ * @param queryFileName
+ * @return
+ *
+ * This function can be used to subsample some dataset images:
+ *
+ *	QStringList imagesTmp;
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_1_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_2_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_3_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/ashmolean_1_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/christ_church_4_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/bodleian_3_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/cornmarket_1_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/hertford_3_query.txt");
+	images = imagesTmp;
+	images.removeDuplicates();
+ */
 static QStringList createTestingSubset(const QStringList images, QString queryFileName)
 {
 	QStringList list;
@@ -63,34 +83,7 @@ static void removeImageIff(QStringList *list, QString im)
 void DatasetManager::addDataset(const QString &name, const QString &path)
 {
 	QStringList images = listDir(path, "jpg");
-#if 0
-	images.clear();
-	QStringList lines = Common::importText("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007/ImageSets/Main/aeroplane_mintrain.txt");
-	foreach (QString line, lines) {
-		if (line.trimmed().isEmpty())
-			continue;
-		images << QString("/home/caglar/myfs/tasks/video_analysis/data/vocimages/JPEGImages/%1.jpg").arg(line.split(" ").first().trimmed());
-	}
-	lines = Common::importText("/home/caglar/myfs/tasks/video_analysis/data/VOCdevkit/VOC2007/ImageSets/Main/aeroplane_mintest.txt");
-	foreach (QString line, lines) {
-		if (line.trimmed().isEmpty())
-			continue;
-		images << QString("/home/caglar/myfs/tasks/video_analysis/data/vocimages/JPEGImages/%1.jpg").arg(line.split(" ").first().trimmed());
-	}
-	images.removeDuplicates();
-#elif 0
-	QStringList imagesTmp;
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_1_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_2_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_3_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/ashmolean_1_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/christ_church_4_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/bodleian_3_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/cornmarket_1_query.txt");
-	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/hertford_3_query.txt");
-	images = imagesTmp;
-	images.removeDuplicates();
-#endif
+
 	/* Oxford trick: remove unused file */
 	int ind =  images.indexOf(path + "/ashmolean_000214.jpg");
 	if (ind >= 0)
@@ -225,34 +218,53 @@ void DatasetManager::parseOxfordFeatures(const QString &path, const QString &ftP
 	//return QPair<Mat, vector<KeyPoint> >(ids, kpts);
 }
 
-void DatasetManager::checkOxfordMissing(const QStringList &images)
+/**
+ * @brief DatasetManager::checkOxfordMissing
+ * @param images List of images to check.
+ * @param featuresBase Base directory for Oxford images.
+ *
+ * This function checks files present to in Oxford database and prints
+ * missing images in local database. Given folder, 'featuresBase', should
+ * contain a README2.txt file and a subfolder 'oxbuild_images' containing
+ * all images.
+ */
+void DatasetManager::checkOxfordMissing(const QStringList &images, const QString &featuresBase)
 {
-	QStringList lines = Common::importText("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/README2.txt");
+	QStringList lines = Common::importText(featuresBase + "/README2.txt");
 	QStringList images2;
 	for (int i = 20; i < lines.size(); i++) {
 		if (!lines[i].contains("oxc1_"))
 			continue;
 		QString imname = lines[i].remove("oxc1_").append(".jpg");
-		images2 << "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images//" + imname;
+		images2 << featuresBase + "/oxbuild_images//" + imname;
 	}
 	for (int i = 0; i < images.size(); i++)
 		if (!images2.contains(images[i]))
 			qDebug() << images[i];
 }
 
-void DatasetManager::convertOxfordFeatures()
+/**
+ * @brief DatasetManager::convertOxfordFeatures
+ * @param featuresBase Base directory for Oxford images.
+ *
+ * This function converts Oxford features present into Oxford database
+ * to our feature/keypoint format. There should be a 'feat_oxc1_hesaff_sift.bin'
+ * file under 'featuresBase' directory. There should be 'word_oxc1_hesaff_sift_16M_1M'
+ * folder under base folder as well.
+ */
+void DatasetManager::convertOxfordFeatures(const QString &featuresBase)
 {
 	QStringList images = dataSetImages("oxford");
 	vector<vector<KeyPoint> > kpts;
 	vector<Mat> features;
 	vector<Mat> ids;
-	parseOxfordFeatures("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/word_oxc1_hesaff_sift_16M_1M/",
-										"/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/feat_oxc1_hesaff_sift.bin",
+	QString base = featuresBase;
+	parseOxfordFeatures(base + "/word_oxc1_hesaff_sift_16M_1M/", base + "/feat_oxc1_hesaff_sift.bin",
 										kpts, features, ids);
-	qDebug() << dataSetImages("oxford").size() << kpts.size() << features.size() << ids.size();
+	ffDebug() << dataSetImages("oxford").size() << kpts.size() << features.size() << ids.size();
 	for (uint i = 0; i < kpts.size(); i++) {
 		QString prefix = images[i].split(".").first().replace("oxbuild_images/", "oxford_features/");
-		qDebug() << "saving" << i << kpts.size() << prefix;
+		ffDebug() << "saving" << i << kpts.size() << prefix;
 		OpenCV::exportKeyPoints(prefix + ".kpts", kpts[i]);
 		OpenCV::exportMatrix(prefix + ".bin", features[i]);
 		OpenCV::exportMatrix(prefix + ".ids", ids[i]);
