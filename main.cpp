@@ -31,12 +31,8 @@ int main(int argc, char *argv[])
 {
 	qInstallMessageHandler(myMessageOutput);
 
-	//Snippets::oxfordPrepare();
-	//Snippets::oxfordCreate();
 	//Snippets::oxfordCreateSoft();
-	//Snippets::oxfordMakePyramids();
 	//Snippets::oxfordMakeDensePyramids();
-	//Snippets::oxfordMakeInvertedIndex();
 	//Snippets::oxfordSpatialRerank();
 	//Snippets::oxfordRunQueriesPar();
 	Snippets::oxfordTemp();

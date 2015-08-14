@@ -1638,59 +1638,7 @@ void Snippets::oxfordRunQueries()
 	assert(dcorrCV.type() == CV_32F);
 	assert(dcorr.type() == CV_32S);
 #endif
-	/*Mat cdists1 = OpenCV::importMatrix("data/ox_dists1.bin");
-	Mat cdists2 = OpenCV::importMatrix("data/ox_dists2.bin");
-	for (int i = 0; i < cdists1.rows; i++)
-		qDebug() << cdists1.col(0).at<float>(i) << cdists2.col(0).at<float>(i);distMetric
-	return;*/
-	distMetric normMet = DISTM_L2;
-	distMetric dmet = DISTM_HELLINGER2;
-	DatasetManager dm;
-	dm.addDataset("oxford", "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images/");
-	QStringList images = dm.dataSetImages("oxford");
-
-	/* import idf vector */
-	Mat df = OpenCV::importMatrix("data/ox_df.bin");
-	vector<vector<int> > iidx;
-	vector<vector<precType> > iidx2;
-	if (normMet == DISTM_L1) {
-		iidx = OpenCV::importVector2("data/ox_iidx_l1.bin");
-		iidx2 = OpenCV::importVector2f("data/ox_iidx2_l1.bin");
-	} else if (normMet == DISTM_L2) {
-		iidx = OpenCV::importVector2("data/ox_iidx_l2.bin");
-		iidx2 = OpenCV::importVector2f("data/ox_iidx2_l2.bin");
-	}
-
-	/* parse query info */
-	QString ftPaths = "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxford_features/";
-
-	vector<Mat> qIds, qbes;
-	QStringList queries = Common::listDir("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/", "txt");
-	QStringList queryFileNames;
-	vector<vector<KeyPoint> > keypoints;
-	foreach (const QString &q, queries) {
-		if (!q.endsWith("_query.txt"))
-			continue;
-		vector<KeyPoint> kpts;
-		Mat ids = getQueryIDs(ftPaths, q, kpts);
-		qIds.push_back(ids);
-		/* calculate query pyramid, i.e. QBE */
-		Mat py = getBow(ids, df, images.size(), normMet);
-		qbes.push_back(py);
-		queryFileNames << q;
-		keypoints.push_back(kpts);
-		qDebug() << q << ids.rows << py.cols << kpts.size();
-	}
-
-#if 1
-	ffDebug() << "querying";
-	/* real operation */
-	Mat dists;
-	if (iidx.size())
-		dists = getQueryDists<precType>(qbes, images, ftPaths, df, iidx, iidx2, dmet);
-	else
-		dists = getQueryDists(qbes, images, ftPaths, df);
-#else
+#if 0
 	Mat dists1 = OpenCV::importMatrixTxt("/home/amenmd/myfs/temp/dists1.txt");
 	Mat dists2 = OpenCV::importMatrixTxt("/home/amenmd/myfs/temp/dists2.txt");
 	qDebug() << dists1.at<float>(3772, 0) << dists1.at<float>(4007, 0);
@@ -1716,8 +1664,6 @@ void Snippets::oxfordRunQueries()
 	Mat APs2 = computeQueryAP(dists2, images, queryFileNames);
 	qDebug() << mean(APs1)[0] << mean(APs2)[0];*/
 #endif
-	Mat APs = computeQueryAP(dists, images, queryFileNames);
-	qDebug() << mean(APs)[0];
 }
 
 void Snippets::oxfordRunQuery()
@@ -1786,46 +1732,6 @@ void Snippets::oxfordRunQuery()
 	Common::exportText(lines.join("\n"), "data/inria_results.txt");
 }
 
-void Snippets::oxfordPrepare()
-{
-	DatasetManager dm;
-	dm.addDataset("oxford", "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images/");
-	dm.convertOxfordFeatures("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/");
-}
-
-void Snippets::oxfordMakePyramids()
-{
-	Mat dict = OpenCV::importMatrix("data/myoxforddict2.bin");
-	DatasetManager dm;
-	dm.addDataset("oxford", "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images/");
-	int K = dict.rows;
-	QStringList images = dm.dataSetImages("oxford");
-	Mat df = Mat::zeros(1, K, CV_32S);
-	for (int i = 0; i < images.size(); i++) {
-		qDebug() << "making pyramid" << i << images.size();
-		QString prefix = images[i].split(".").first().replace("oxbuild_images/", "oxford_features/");
-		Mat py = Mat::zeros(1, K, CV_32F);
-		Mat ids = OpenCV::importMatrix(prefix + ".ids");
-		for (int j = 0; j < ids.rows; j++)
-			py.at<float>(ids.at<uint>(j)) += 1;
-		//py.copyTo(pyramids.row(i));
-		OpenCV::exportMatrix(prefix + "_pyr.bin", py);
-		//OpenCV::exportMatrixTxt(prefix + "_pyr.txt", py);
-
-		/* df computation */
-		Mat tcont = Mat::zeros(1, py.cols, CV_32S);
-		for (int j = 0; j < py.cols; j++)
-			if (py.at<float>(0, j) > 0)
-				tcont.at<int>(0, j) = 1;
-		for (int j = 0; j < py.cols; j++)
-			if (tcont.at<int>(0, j))
-				df.at<int>(0, j) += 1;
-	}
-
-	OpenCV::exportMatrix("data/ox_df.bin", df);
-	//dm.calculateOxfordIdfs(images, ftPaths, K);
-}
-
 void Snippets::oxfordMakeDensePyramids()
 {
 	DatasetManager dm;
@@ -1849,47 +1755,6 @@ void Snippets::oxfordMakeDensePyramids()
 	}
 }
 
-void Snippets::oxfordMakeInvertedIndex()
-{
-	DatasetManager dm;
-	dm.addDataset("oxford", "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images/");
-	QStringList images = dm.dataSetImages("oxford");
-	vector<vector<int> > iidx;
-	vector<vector<precType> > iidx2;
-	Mat df = OpenCV::importMatrix("data/ox_df.bin");
-	int n = 0;
-	for (int i = 0; i < images.size(); i++) {
-		ffDebug() << i << images.size();
-		QString prefix = images[i].split(".").first().replace("oxbuild_images/", "oxford_features/");
-		Mat py = OpenCV::importMatrix(prefix + "pyr.bin");
-		Mat pyp = postProcBow(py, df, images.size());
-		if (OpenCV::getL1Norm(pyp) == 1)
-			n = 1;
-		if (OpenCV::getL2Norm(pyp) == 1)
-			n = 2;
-		if (!iidx.size()) {
-			for (int j = 0; j < py.cols; j++) {
-				iidx.push_back(vector<int>());
-				iidx2.push_back(vector<precType>());
-			}
-		}
-		for (int j = 0; j < py.cols; j++) {
-			if (py.at<float>(j) > 0) {
-				iidx[j].push_back(i);
-				iidx2[j].push_back(pyp.at<float>(j));
-			}
-		}
-	}
-	assert(n != 0);
-	if (n == 1) {
-		OpenCV::exportVector2("data/ox_iidx_l1.bin", iidx);
-		OpenCV::exportVector2f("data/ox_iidx2_l1.bin", iidx2);
-	} else if (n == 2) {
-		OpenCV::exportVector2("data/ox_iidx_l2.bin", iidx);
-		OpenCV::exportVector2f("data/ox_iidx2_l2.bin", iidx2);
-	}
-}
-
 void Snippets::oxfordSpatialRerank()
 {
 	vector<KeyPoint> qkpts = OpenCV::importKeyPoints("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxford_features/all_souls_000013.kpts");
@@ -1909,87 +1774,6 @@ void Snippets::oxfordSpatialRerank()
 	Mat mask;
 	Mat mrans = findHomography(tpts, qpts, cv::RANSAC, 4, mask);
 	qDebug() << mask.rows << mask.cols << countNonZero(mask) << qkpts.size();
-}
-
-void Snippets::oxfordCreate()
-{
-	int K = 1000000;
-	QString ftPaths = "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxford_features/";
-	DatasetManager dm;
-	dm.addDataset("oxford", "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images/");
-	QStringList images = dm.dataSetImages("oxford");
-	Mat clusterData(0, 128, CV_32F);
-	//#pragma omp parallel for
-	for (int i = 0; i < images.size(); i++) {
-		ffDebug() << i << images.size();
-		QFileInfo fi(images[i]);
-		QString prefix = QString("%1/%2").arg(ftPaths).arg(fi.baseName());
-		if (!QFile::exists(prefix + ".bin")) {
-#if 0
-			Mat im = OpenCV::loadImage(images[i]);
-			vector<KeyPoint> kpts = Pyramids::extractKeypoints(im);
-			Mat fts = Pyramids::computeFeatures(im, kpts);
-#else
-			vector<KeyPoint> kpts;
-			Mat fts;
-			QString ffile = QString(images[i]).append(".hesaff.sift");
-			QStringList lines = Common::importText(ffile);
-			for (int j = 2; j < lines.size(); j++) {
-				if (lines[j].trimmed().isEmpty())
-					continue;
-				QStringList vals = lines[j].split(" ");
-				KeyPoint kpt;
-				kpt.pt.x = vals[0].toFloat();
-				kpt.pt.y = vals[1].toFloat();
-				kpts.push_back(kpt);
-				Mat f(1, 128, CV_32F);
-				for (int k = 0; k < 128; k++)
-					f.at<float>(k) = vals[5 + k].toFloat();
-				fts.push_back(f);
-			}
-#endif
-			OpenCV::exportKeyPoints(prefix + ".kpts", kpts);
-			OpenCV::exportMatrix(prefix + ".bin", fts);
-			/* for dictionary */
-			clusterData.push_back(OpenCV::subSampleRandom(fts, 1000));
-		}
-	}
-#if 0
-	for (int i = 0; i < images.size(); i++) {
-		ffDebug() << "importing" << i << images.size();
-		QFileInfo fi(images[i]);
-		QString prefix = QString("%1/%2").arg(ftPaths).arg(fi.baseName());
-		Mat fts = OpenCV::importMatrix(prefix + ".bin");
-		clusterData.push_back(OpenCV::subSampleRandom(fts, 1000));
-	}
-#endif
-#if 1
-	ffDebug() << "clustering dictionary";
-	Mat dict = clusterData;
-	if (clusterData.rows > K)
-		dict = Pyramids::clusterFeatures(clusterData, K);
-	OpenCV::exportMatrix("data/myoxforddict2.bin", dict);
-#else
-	Mat dict = OpenCV::importMatrix("data/myoxforddict.bin");
-#endif
-	clusterData = Mat();
-	/* now calculate id's */
-	Pyramids pyr;
-	pyr.setDict(dict);
-	for (int i = 0; i < images.size(); i++) {
-		ffDebug() << "id calc" << i << images.size();
-		QFileInfo fi(images[i]);
-		QString prefix = QString("%1/%2").arg(ftPaths).arg(fi.baseName());
-		//vector<KeyPoint> kpts = OpenCV::importKeyPoints(prefix + ".kpts");
-		Mat fts = OpenCV::importMatrix(prefix + ".bin");
-		std::vector<DMatch> matches = pyr.matchFeatures(fts);
-		Mat ids(fts.rows, 1, CV_32S);
-		for (uint i = 0; i < matches.size(); i++) {
-			int idx = matches[i].trainIdx;
-			ids.at<int>(i, 0) = idx;
-		}
-		OpenCV::exportMatrix(prefix + ".ids", ids);
-	}
 }
 
 void Snippets::oxfordCreateSoft()

@@ -31,12 +31,8 @@ public slots:
 	static void oxfordRunQueriesPar();
 	static void oxfordRunQueries();
 	static void oxfordRunQuery();
-	static void oxfordPrepare();
-	static void oxfordMakePyramids();
 	static void oxfordMakeDensePyramids();
-	static void oxfordMakeInvertedIndex();
 	static void oxfordSpatialRerank();
-	static void oxfordCreate();
 	static void oxfordCreateSoft();
 	static void getAP(const QString &resultsFile, const QString &predictInputs, const QString &categories);
 	static void toVOCKit(const QString &path);
