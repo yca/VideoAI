@@ -13,6 +13,8 @@ TEMPLATE = app
 
 DEFINES += DEBUG
 
+include(build_config.pri)
+
 SOURCES += main.cpp\
         mainwindow.cpp \
     scripting/scriptedit.cpp \
@@ -104,8 +106,8 @@ openmp {
 
 vlfeat {
     DEFINES += HAVE_VLFEAT
-    INCLUDEPATH += /home/caglar/myfs/tasks/video_analysis/vlfeat
-    LIBS += -L/home/caglar/myfs/tasks/video_analysis/vlfeat/bin/glnxa64/ -lvl
+    INCLUDEPATH += $$VLFEAT_PATH
+    LIBS += -L$$VLFEAT_PATH/bin/glnxa64 -lvl
 }
 
-LIBS += -lblas
+LIBS += -L/usr/lib/libblas -lblas

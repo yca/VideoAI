@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "snippets.h"
 
+#include <QDebug>
 #include <QApplication>
 
 #include <stdio.h>
@@ -29,6 +30,25 @@ static void myMessageOutput(QtMsgType type, const QMessageLogContext &context, c
 int main(int argc, char *argv[])
 {
 	qInstallMessageHandler(myMessageOutput);
+
+	//Snippets::oxfordPrepare();
+	//Snippets::oxfordCreate();
+	//Snippets::oxfordCreateSoft();
+	//Snippets::oxfordMakePyramids();
+	//Snippets::oxfordMakeDensePyramids();
+	//Snippets::oxfordMakeInvertedIndex();
+	//Snippets::oxfordSpatialRerank();
+	//Snippets::oxfordRunQueriesPar();
+	Snippets::oxfordTemp();
+	//Snippets::oxfordRunQueries();
+	//Snippets::oxfordRunQuery();
+	//Snippets::oxfordRerankAll();
+	//qDebug() << Snippets::oxfordRerank(0);
+	/*QList<int> qs;
+	for (int i = 0; i < 55; i++)
+		qs << i;
+	Snippets::oxfordRerank(qs);*/
+	return 0;
 
 	int step = 0, L = 2, H = 0;
 	//Snippets::vocpyr2linearsvm("data/pyramids_5000_L2_s2.dat", "L2_5000_s2_np", 1);
