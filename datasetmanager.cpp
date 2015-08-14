@@ -24,6 +24,42 @@ DatasetManager::DatasetManager(QObject *parent) :
 	datasets.insert("sample", QStringList() << "testImage");
 }
 
+static QStringList createTestingSubset(const QStringList images, QString queryFileName)
+{
+	QStringList list;
+	QFileInfo fi(images.first());
+
+	QStringList lines = Common::importText(QString(queryFileName).split("_query.").first().append("_good.txt"));
+	foreach (QString line, lines) {
+		if (line.trimmed().isEmpty())
+			continue;
+		list << QString("%1/%2.jpg").arg(fi.absolutePath()).arg(line);
+	}
+
+	lines = Common::importText(QString(queryFileName).split("_query.").first().append("_ok.txt"));
+	foreach (QString line, lines) {
+		if (line.trimmed().isEmpty())
+			continue;
+		list << QString("%1/%2.jpg").arg(fi.absolutePath()).arg(line);
+	}
+
+	lines = Common::importText(QString(queryFileName).split("_query.").first().append("_junk.txt"));
+	foreach (QString line, lines) {
+		if (line.trimmed().isEmpty())
+			continue;
+		list << QString("%1/%2.jpg").arg(fi.absolutePath()).arg(line);
+	}
+
+	return list;
+}
+
+static void removeImageIff(QStringList *list, QString im)
+{
+	int ind =  list->indexOf(im);
+	if (ind >= 0)
+		list->removeAt(ind);
+}
+
 void DatasetManager::addDataset(const QString &name, const QString &path)
 {
 	QStringList images = listDir(path, "jpg");
@@ -42,7 +78,45 @@ void DatasetManager::addDataset(const QString &name, const QString &path)
 		images << QString("/home/caglar/myfs/tasks/video_analysis/data/vocimages/JPEGImages/%1.jpg").arg(line.split(" ").first().trimmed());
 	}
 	images.removeDuplicates();
+#elif 0
+	QStringList imagesTmp;
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_1_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_2_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/all_souls_3_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/ashmolean_1_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/christ_church_4_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/bodleian_3_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/cornmarket_1_query.txt");
+	imagesTmp += createTestingSubset(images, "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/gt_files_170407/hertford_3_query.txt");
+	images = imagesTmp;
+	images.removeDuplicates();
 #endif
+	/* Oxford trick: remove unused file */
+	int ind =  images.indexOf(path + "/ashmolean_000214.jpg");
+	if (ind >= 0)
+		images.removeAt(ind);
+	/* Paris trick: remove corrupted files */
+	removeImageIff(&images, path + "/paris_louvre_000136.jpg");
+	removeImageIff(&images, path + "/paris_louvre_000146.jpg");
+	removeImageIff(&images, path + "/paris_moulinrouge_000422.jpg");
+	removeImageIff(&images, path + "/paris_museedorsay_001059.jpg");
+	removeImageIff(&images, path + "/paris_notredame_000188.jpg");
+	removeImageIff(&images, path + "/paris_pantheon_000284.jpg");
+	removeImageIff(&images, path + "/paris_pantheon_000960.jpg");
+	removeImageIff(&images, path + "/paris_pantheon_000974.jpg");
+	removeImageIff(&images, path + "/paris_pompidou_000195.jpg");
+	removeImageIff(&images, path + "/paris_pompidou_000196.jpg");
+	removeImageIff(&images, path + "/paris_pompidou_000201.jpg");
+	removeImageIff(&images, path + "/paris_pompidou_000467.jpg");
+	removeImageIff(&images, path + "/paris_pompidou_000640.jpg");
+	removeImageIff(&images, path + "/paris_sacrecoeur_000299.jpg");
+	removeImageIff(&images, path + "/paris_sacrecoeur_000330.jpg");
+	removeImageIff(&images, path + "/paris_sacrecoeur_000353.jpg");
+	removeImageIff(&images, path + "/paris_triomphe_000662.jpg");
+	removeImageIff(&images, path + "/paris_triomphe_000833.jpg");
+	removeImageIff(&images, path + "/paris_triomphe_000863.jpg");
+	removeImageIff(&images, path + "/paris_triomphe_000867.jpg");
+
 	datasets.insert(name, images);
 	currentDataset = name;
 }
@@ -104,4 +178,102 @@ QList<QPair<int, QString> > DatasetManager::voc2007GetImagesForCateogory(const Q
 		break;
 	}
 	return images;
+}
+
+void DatasetManager::parseOxfordFeatures(const QString &path, const QString &ftPath, vector<vector<KeyPoint> > &kpts, vector<Mat> &features, vector<Mat> &ids)
+{
+	QDir d(path);
+	QStringList files = d.entryList(QStringList() << QString("*.txt")
+									, QDir::NoDotAndDotDot | QDir::Files, QDir::Name);
+	foreach (QString file, files) {
+		qDebug() << "parsing" << files.indexOf(file) << files.size();
+		QStringList lines = Common::importText(d.filePath(file));
+		vector<KeyPoint> fkpts;
+		Mat fids(0, 1, CV_32S);
+		/* first 2 lines can be ignored */
+		for (int i = 2; i < lines.size(); i++) {
+			QStringList vals = lines[i].split(" ", QString::SkipEmptyParts);
+			if (vals.size() < 5)
+				continue;
+			KeyPoint kpt;
+			kpt.pt.x = vals[1].toFloat();
+			kpt.pt.y = vals[2].toFloat();
+			fkpts.push_back(kpt);
+			assert(vals[0].toInt() != 0);
+			Mat m = Mat::ones(1, 1, CV_32S) * (vals[0].toInt() - 1); /* 1-based in dataset files */
+			fids.push_back(m);
+		}
+		kpts.push_back(fkpts);
+		ids.push_back(fids);
+	}
+	QByteArray ba = Common::importData(ftPath);
+	const uchar *data = (const uchar *)ba.constData();
+	for (uint i = 0; i < kpts.size(); i++) {
+		qDebug() << "importing" << i << kpts.size();
+		vector<KeyPoint> fkpts = kpts[i];
+		Mat ffts(fkpts.size(), 128, CV_8U);
+		for (uint j = 0; j < fkpts.size(); j++) {
+			for (int k = 0; k < 128; k++) {
+				ffts.at<uchar>(j, k) = data[k];
+			}
+			data += 128;
+		}
+		features.push_back(ffts);
+	}
+	data += 12;
+	assert(data - (const uchar *)ba.constData() == ba.size());
+	//return QPair<Mat, vector<KeyPoint> >(ids, kpts);
+}
+
+void DatasetManager::checkOxfordMissing(const QStringList &images)
+{
+	QStringList lines = Common::importText("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/README2.txt");
+	QStringList images2;
+	for (int i = 20; i < lines.size(); i++) {
+		if (!lines[i].contains("oxc1_"))
+			continue;
+		QString imname = lines[i].remove("oxc1_").append(".jpg");
+		images2 << "/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/oxbuild_images//" + imname;
+	}
+	for (int i = 0; i < images.size(); i++)
+		if (!images2.contains(images[i]))
+			qDebug() << images[i];
+}
+
+void DatasetManager::convertOxfordFeatures()
+{
+	QStringList images = dataSetImages("oxford");
+	vector<vector<KeyPoint> > kpts;
+	vector<Mat> features;
+	vector<Mat> ids;
+	parseOxfordFeatures("/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/word_oxc1_hesaff_sift_16M_1M/",
+										"/home/amenmd/myfs/tasks/hilal_tez/dataset/oxford/feat_oxc1_hesaff_sift.bin",
+										kpts, features, ids);
+	qDebug() << dataSetImages("oxford").size() << kpts.size() << features.size() << ids.size();
+	for (uint i = 0; i < kpts.size(); i++) {
+		QString prefix = images[i].split(".").first().replace("oxbuild_images/", "oxford_features/");
+		qDebug() << "saving" << i << kpts.size() << prefix;
+		OpenCV::exportKeyPoints(prefix + ".kpts", kpts[i]);
+		OpenCV::exportMatrix(prefix + ".bin", features[i]);
+		OpenCV::exportMatrix(prefix + ".ids", ids[i]);
+	}
+}
+
+void DatasetManager::calculateOxfordIdfs(const QStringList &images, const QString ftPaths, int cols)
+{
+	/* calculate idf-s */
+	Mat df = Mat::zeros(1, cols, CV_32S);
+	for (int i = 0; i < images.size(); i++) {
+		qDebug() << "idf" << i << images.size();
+		QString iname = images[i].split("/", QString::SkipEmptyParts).last().split(".").first();
+		Mat m = OpenCV::importMatrix(QString(iname).prepend(ftPaths).append("_pyr.bin"));
+		Mat tcont = Mat::zeros(1, m.cols, CV_32S);
+		for (int j = 0; j < m.cols; j++)
+			if (m.at<float>(0, j) > 0)
+				tcont.at<int>(0, j) = 1;
+		for (int j = 0; j < m.cols; j++)
+			if (tcont.at<int>(0, j))
+				df.at<int>(0, j) += 1;
+	}
+	OpenCV::exportMatrix("data/ox_df.bin", df);
 }

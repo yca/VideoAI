@@ -35,6 +35,11 @@ float OpenCV::getL2Norm(const Mat &m1)
 	return norm(m1, NORM_L2);
 }
 
+float OpenCV::getHammingNorm(const Mat &m1)
+{
+	return norm(m1, NORM_HAMMING);
+}
+
 float OpenCV::getL1Norm(const Mat &m1, const Mat &m2)
 {
 	return normL1_((float *)m1.data, (float *)m2.data, m1.cols * m1.rows);
@@ -43,6 +48,19 @@ float OpenCV::getL1Norm(const Mat &m1, const Mat &m2)
 float OpenCV::getL2Norm(const Mat &m1, const Mat &m2)
 {
 	return normL2Sqr_((float *)m1.data, (float *)m2.data, m1.cols * m1.rows);
+}
+
+float OpenCV::getHammingNorm(const Mat &m1, const Mat &m2)
+{
+	return 0;//normHamming((float *)m1.data, (float *)m2.data, m1.cols * m1.rows);
+}
+
+float OpenCV::getCosineNorm(const Mat &m1, const Mat &m2)
+{
+	double ab = m1.dot(m2);
+	double aa = m1.dot(m1);
+	double bb = m2.dot(m2);
+	return -ab / sqrt(aa * bb);
 }
 
 Mat OpenCV::blendImages(const Mat &im1, const Mat &im2, double alpha, double beta)
@@ -102,7 +120,8 @@ int OpenCV::exportMatrix(QString filename, const Mat &m)
 Mat OpenCV::importMatrix(QString filename)
 {
 	QFile f(filename);
-	f.open(QIODevice::ReadOnly);
+	if (!f.open(QIODevice::ReadOnly))
+		return Mat();
 	QDataStream in(&f);
 	in.setByteOrder(QDataStream::LittleEndian);
 	int size; in >> size;
@@ -150,6 +169,183 @@ Mat OpenCV::importMatrixTxt(QString filename)
 	return data;
 }
 
+void OpenCV::exportKeyPoints(QString filename, const vector<KeyPoint> &keypoints)
+{
+	QFile f(filename);
+	f.open(QIODevice::WriteOnly);
+	QDataStream out(&f);
+	out.setByteOrder(QDataStream::LittleEndian);
+	out << 1;
+	const vector<KeyPoint> &v = keypoints;
+	out << (int)v.size();
+	for (uint j = 0; j < v.size(); j++) {
+		KeyPoint k = v.at(j);
+		out << k.pt.x;
+		out << k.pt.y;
+		out << k.size;
+		out << k.angle;
+		out << k.response;
+		out << k.octave;
+		out << k.class_id;
+	}
+	f.close();
+}
+
+void OpenCV::exportVector2(QString filename, const vector<vector<int> > &v)
+{
+	QFile f(filename);
+	f.open(QIODevice::WriteOnly);
+	QDataStream out(&f);
+	out.setByteOrder(QDataStream::LittleEndian);
+	out << 1;
+	out << (int)v.size();
+	for (uint j = 0; j < v.size(); j++) {
+		const vector<int> v2 = v.at(j);
+		out << (int)v2.size();
+		for (uint i = 0; i < v2.size(); i++)
+			out << (int)v2[i];
+	}
+	f.close();
+}
+
+void OpenCV::exportVector2f(QString filename, const vector<vector<float> > &v)
+{
+	QFile f(filename);
+	f.open(QIODevice::WriteOnly);
+	QDataStream out(&f);
+	out.setByteOrder(QDataStream::LittleEndian);
+	out.setFloatingPointPrecision(QDataStream::DoublePrecision);
+	out << 2; //1:single 2:double
+	out << (int)v.size();
+	for (uint j = 0; j < v.size(); j++) {
+		const vector<float> v2 = v.at(j);
+		out << (int)v2.size();
+		for (uint i = 0; i < v2.size(); i++)
+			out << (float)v2[i];
+	}
+	f.close();
+}
+
+void OpenCV::exportVector2d(QString filename, const vector<vector<double> > &v)
+{
+	QFile f(filename);
+	f.open(QIODevice::WriteOnly);
+	QDataStream out(&f);
+	out.setByteOrder(QDataStream::LittleEndian);
+	out.setFloatingPointPrecision(QDataStream::DoublePrecision);
+	out << 2; //1:single 2:double
+	out << (int)v.size();
+	for (uint j = 0; j < v.size(); j++) {
+		const vector<double> v2 = v.at(j);
+		out << (int)v2.size();
+		for (uint i = 0; i < v2.size(); i++)
+			out << (double)v2[i];
+	}
+	f.close();
+}
+
+const vector<vector<int> > OpenCV::importVector2(QString filename)
+{
+	vector<vector<int> > v;
+	QFile f(filename);
+	if (!f.open(QIODevice::ReadOnly))
+		return v;
+	QDataStream in(&f);
+	in.setByteOrder(QDataStream::LittleEndian);
+	int size; in >> size;
+	in >> size; // real size
+	for (int i = 0; i < size; i++) {
+		vector<int> v2;
+		int vsize; in >> vsize;
+		for (int j = 0; j < vsize; j++) {
+			int k; in >> k;
+			v2.push_back(k);
+		}
+		v.push_back(v2);
+	}
+	return v;
+}
+
+const vector<vector<float> > OpenCV::importVector2f(QString filename)
+{
+	vector<vector<float> > v;
+	QFile f(filename);
+	if (!f.open(QIODevice::ReadOnly))
+		return v;
+	QDataStream in(&f);
+	in.setByteOrder(QDataStream::LittleEndian);
+	in.setFloatingPointPrecision(QDataStream::SinglePrecision);
+	int size; in >> size;
+	if (size > 1) {
+		ffDebug() << "reading in double precision";
+		in.setFloatingPointPrecision(QDataStream::DoublePrecision);
+	}
+	in >> size; // real size
+	for (int i = 0; i < size; i++) {
+		vector<float> v2;
+		int vsize; in >> vsize;
+		for (int j = 0; j < vsize; j++) {
+			float k; in >> k;
+			v2.push_back(k);
+		}
+		v.push_back(v2);
+	}
+	return v;
+}
+
+const vector<vector<double> > OpenCV::importVector2d(QString filename)
+{
+	vector<vector<double> > v;
+	QFile f(filename);
+	if (!f.open(QIODevice::ReadOnly))
+		return v;
+	QDataStream in(&f);
+	in.setByteOrder(QDataStream::LittleEndian);
+	in.setFloatingPointPrecision(QDataStream::SinglePrecision);
+	int size; in >> size;
+	if (size > 1) {
+		ffDebug() << "reading in double precision";
+		in.setFloatingPointPrecision(QDataStream::DoublePrecision);
+	}
+	in >> size; // real size
+	for (int i = 0; i < size; i++) {
+		vector<double> v2;
+		int vsize; in >> vsize;
+		for (int j = 0; j < vsize; j++) {
+			double k; in >> k;
+			v2.push_back(k);
+		}
+		v.push_back(v2);
+	}
+	return v;
+}
+
+const vector<KeyPoint> OpenCV::importKeyPoints(QString filename)
+{
+	vector<KeyPoint> v;
+	QFile f(filename);
+	if (!f.open(QIODevice::ReadOnly))
+		return v;
+	QDataStream in(&f);
+	in.setByteOrder(QDataStream::LittleEndian);
+	int size; in >> size;
+	//for (int i = 0; i < size; i++) {
+		int vsize; in >> vsize;
+		for (int j = 0; j < vsize; j++) {
+			KeyPoint k;
+			in >> k.pt.x;
+			in >> k.pt.y;
+			in >> k.size;
+			in >> k.angle;
+			in >> k.response;
+			in >> k.octave;
+			in >> k.class_id;
+			v.push_back(k);
+		}
+		return v;
+	//}
+}
+
 int OpenCV::exportMatrixTxt(const QString &filename, const Mat &m)
 {
 	QFile f(filename);
@@ -169,7 +365,7 @@ int OpenCV::exportMatrixTxt(const QString &filename, const Mat &m)
 
 Mat OpenCV::subSampleRandom(const Mat &m, int count)
 {
-	if (count > m.rows)
+	if (count >= m.rows)
 		return m;
 	Mat sub(0, m.cols, CV_32F);
 	QList<int> l;

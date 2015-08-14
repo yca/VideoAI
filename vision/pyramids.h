@@ -29,6 +29,8 @@ public slots:
 	Mat calculatePyramids(const QStringList &images, int L, int step);
 	Mat calculatePyramidsH(const QStringList &images, int L, int H, int step);
 
+	std::vector<DMatch> matchFeatures(const Mat &features);
+	vector<vector<DMatch> > matchFeatures(const Mat &features, int knn);
 	Mat makeSpm(const QString &filename, int L, int step = -1);
 	Mat makeSpmH(const QString &filename, int L, int H, int step = -1);
 	Mat makeSpmFromMat(const Mat &im, int L, int step = -1);

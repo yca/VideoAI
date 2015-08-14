@@ -156,6 +156,20 @@ Mat Pyramids::calculatePyramidsH(const QStringList &images, int L, int H, int st
 	return pyramids;
 }
 
+std::vector<DMatch> Pyramids::matchFeatures(const Mat &features)
+{
+	std::vector<DMatch> matches;
+	matcher->match(features, matches);
+	return matches;
+}
+
+vector<vector<DMatch> > Pyramids::matchFeatures(const Mat &features, int knn)
+{
+	vector<vector<DMatch> > matches;
+	matcher->knnMatch(features, matches, knn);
+	return matches;
+}
+
 Mat Pyramids::makeSpm(const QString &filename, int L, int step)
 {
 	if (!QFile::exists(filename))
