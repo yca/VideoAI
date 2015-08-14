@@ -26,6 +26,16 @@ QStringList Common::importText(const QString &filename)
 	return lines;
 }
 
+QByteArray Common::importData(const QString &filename)
+{
+	QFile file(filename);
+	if (!file.open(QIODevice::ReadOnly))
+		return QByteArray();
+	QByteArray ba = file.readAll();
+	file.close();
+	return ba;
+}
+
 QStringList Common::listDir(QString path, QString suffix)
 {
 	QStringList list;
