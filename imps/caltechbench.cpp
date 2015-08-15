@@ -65,6 +65,45 @@ static Mat getRBow(const Mat &imBows, int dimX, int dimY)
 	return desc / OpenCV::getL1Norm(desc);
 }
 
+static Mat bow2bow(const Mat &b1, const Mat &b2)
+{
+	Mat bow(1, b1.cols, b1.type());
+	for (int i = 0; i < b1.cols; i++)
+		//bow.at<float>(i) = max(b1.at<float>(i), b2.at<float>(i));
+		bow.at<float>(i) = b1.at<float>(i) + b2.at<float>(i);
+	return bow;
+}
+
+static Mat getRBow2(const Mat &imBows, int dimX, int dimY)
+{
+	Mat desc = Mat::ones(1, imBows.cols * imBows.rows, CV_32F) * INT_MAX;
+	for (int j = 0; j < imBows.rows; j++) {
+		Mat bow = imBows.row(j);
+		Mat ns = getNeighbours(j, dimY, dimX);
+		for (int k = 0; k < ns.rows; k++)
+			bow = bow2bow(bow, imBows.row(ns.at<int>(k)));
+		bow.copyTo(desc.colRange(j * imBows.cols, j * imBows.cols + imBows.cols));
+	}
+	return desc / OpenCV::getL1Norm(desc);
+}
+
+static Mat getRBow3(const Mat &imBows, int dimX, int dimY)
+{
+	Mat desc(1, 0, CV_32F);
+	for (int j = 0; j < imBows.rows; j++) {
+		const Mat &bow = imBows.row(j);
+		Mat ns = getNeighbours(j, dimY, dimX);
+		Mat m(1, ns.rows, CV_32F);
+		for (int k = 0; k < ns.rows; k++)
+			m.at<float>(k) = OpenCV::getL1Norm(bow, imBows.row(ns.at<int>(k)));
+		if (desc.cols == 0)
+			desc = m;
+		else
+			hconcat(m, desc, desc);
+	}
+	return desc / OpenCV::getL1Norm(desc);
+}
+
 static void exportSvmData(const Mat &pyramids, const Mat &labels, const QString &dataPrefix, const vector<Mat> &trainSet, const vector<Mat> &testSet, const Mat &classPos)
 {
 	Mat trainPyramids(0, pyramids.cols, pyramids.type());

@@ -26,16 +26,32 @@ static void myMessageOutput(QtMsgType type, const QMessageLogContext &context, c
 		abort();
 	}
 }
-
+#include "imps/caltechbench.h"
 int main(int argc, char *argv[])
 {
 	qInstallMessageHandler(myMessageOutput);
+
+	//CaltechBench::createImageFeatures();
+	//CaltechBench::createDictionary(512, 1000);
+	//return 0;
+
+	int flags = 0x3; /* 1: pyramids, 2: rbow 3: both */
+	int K = 512;
+	QString dname = QString("data/dict_%1.bin").arg(K);
+
+	//CaltechBench::createImageIds(dname);
+
+	//CaltechBench::createImageDescriptors("data/dict_128.bin");
+	CaltechBench::createImageDescriptors2(dname, 2, flags);
+
+	//CaltechBench::exportForLibSvm();
+	CaltechBench::exportForLibSvmMulti(flags);
 
 	//Snippets::oxfordCreateSoft();
 	//Snippets::oxfordMakeDensePyramids();
 	//Snippets::oxfordSpatialRerank();
 	//Snippets::oxfordRunQueriesPar();
-	Snippets::oxfordTemp();
+	//Snippets::oxfordTemp();
 	//Snippets::oxfordRunQueries();
 	//Snippets::oxfordRunQuery();
 	//Snippets::oxfordRerankAll();
