@@ -101,6 +101,29 @@ Mat Pyramids::clusterFeatures(const Mat &features, int clusterCount)
 	return centers.rowRange(Range(0, ccnt));
 }
 
+Mat Pyramids::makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int K)
+{
+	int binCount = histCount(L);
+	Mat linear = Mat::zeros(1, binCount * K, CV_32F);
+	Mat hists = Mat(binCount, K, CV_32F, linear.data);
+
+	/* calculate histogram values using matches and keypoints */
+	for (int i = 0; i < ids.rows; i++) {
+		int idx = ids.at<int>(i);
+		const KeyPoint kpt = keypoints.at(i);
+		Mat cont = findPointContributions(kpt.pt.x, kpt.pt.y, L, imW, imH);
+		for (int j = 0; j < cont.rows; j++)
+			hists.at<float>(cont.at<float>(j), idx) += 1;
+	}
+	for (int i = 0; i < hists.rows; i++) {
+		Mat h = hists.row(i);
+		h /= OpenCV::getL1Norm(h);
+		h.copyTo(hists.row(i));
+	}
+
+	return linear / OpenCV::getL1Norm(linear);
+}
+
 void Pyramids::createDictionary(const QStringList &images, int clusterCount)
 {
 	computeImageFeatures(images);
