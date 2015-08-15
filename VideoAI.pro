@@ -36,7 +36,8 @@ SOURCES += main.cpp\
     svm/linear.cpp \
     svm/tron.cpp \
     vision/pyramidsvl.cpp \
-    imps/oxfordretrieval.cpp
+    imps/oxfordretrieval.cpp \
+    imps/caltechbench.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -58,7 +59,8 @@ HEADERS  += mainwindow.h \
     svm/linear.h \
     svm/tron.h \
     vision/pyramidsvl.h \
-    imps/oxfordretrieval.h
+    imps/oxfordretrieval.h \
+    imps/caltechbench.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
