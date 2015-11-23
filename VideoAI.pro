@@ -37,7 +37,8 @@ SOURCES += main.cpp\
     svm/tron.cpp \
     vision/pyramidsvl.cpp \
     imps/oxfordretrieval.cpp \
-    imps/caltechbench.cpp
+    imps/caltechbench.cpp \
+    lmm/classificationpipeline.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -60,7 +61,8 @@ HEADERS  += mainwindow.h \
     svm/tron.h \
     vision/pyramidsvl.h \
     imps/oxfordretrieval.h \
-    imps/caltechbench.h
+    imps/caltechbench.h \
+    lmm/classificationpipeline.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
@@ -68,7 +70,7 @@ FORMS    += mainwindow.ui \
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 openmp vlfeat
+CONFIG += opencv2 openmp vlfeat lmm
 
 opencv2 {
     INCLUDEPATH += /usr/include/opencv
@@ -112,6 +114,11 @@ vlfeat {
     DEFINES += HAVE_VLFEAT
     INCLUDEPATH += $$VLFEAT_PATH
     LIBS += -L$$VLFEAT_PATH/bin/glnxa64 -lvl
+}
+
+lmm {
+    include($$INSTALL_PREFIX/usr/local/include/lmm/lmm.pri)
+    DEFINES += HAVE_LMM
 }
 
 LIBS += -L/usr/lib/libblas -lblas
