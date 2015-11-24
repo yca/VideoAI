@@ -38,7 +38,8 @@ SOURCES += main.cpp\
     vision/pyramidsvl.cpp \
     imps/oxfordretrieval.cpp \
     imps/caltechbench.cpp \
-    lmm/classificationpipeline.cpp
+    lmm/classificationpipeline.cpp \
+    opencv/cvbuffer.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -62,7 +63,8 @@ HEADERS  += mainwindow.h \
     vision/pyramidsvl.h \
     imps/oxfordretrieval.h \
     imps/caltechbench.h \
-    lmm/classificationpipeline.h
+    lmm/classificationpipeline.h \
+    opencv/cvbuffer.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
@@ -70,7 +72,7 @@ FORMS    += mainwindow.ui \
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 openmp vlfeat lmm
+CONFIG += opencv2 vlfeat lmm
 
 opencv2 {
     INCLUDEPATH += /usr/include/opencv

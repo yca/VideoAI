@@ -17,8 +17,8 @@ using namespace xfeatures2d;
 #include <QFile>
 #include <QColor>
 
-static FlannBasedMatcher *matcher = NULL;
-#pragma omp threadprivate(matcher)
+//static FlannBasedMatcher *matcher = NULL;
+//#pragma omp threadprivate(matcher)
 
 int Pyramids::histCount(int L)
 {
@@ -66,6 +66,7 @@ Mat Pyramids::findPointContributions(int x, int y, int level, int width, int hei
 Pyramids::Pyramids(QObject *parent) :
 	QObject(parent)
 {
+	matcher = NULL;
 }
 
 vector<KeyPoint> Pyramids::extractDenseKeypoints(const Mat &m, int step)
@@ -95,6 +96,8 @@ Mat Pyramids::computeFeatures(const Mat &m, vector<KeyPoint> &keypoints)
 Mat Pyramids::clusterFeatures(const Mat &features, int clusterCount)
 {
 	fDebug("will cluster %d features", features.rows);
+	if (features.rows == 0)
+		return Mat();
 	const cvflann::KMeansIndexParams p;
 	Mat centers(clusterCount, features.cols, CV_32F);
 	int ccnt = cv::flann::hierarchicalClustering<flann::L2<float> >(features, centers, p);

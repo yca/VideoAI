@@ -53,6 +53,7 @@ protected:
 
 	Mat dict;
 	Mat imageFeatures;
+	FlannBasedMatcher *matcher;
 };
 
 #endif // PYRAMIDS_H
