@@ -145,6 +145,7 @@ Mat OpenCV::importMatrix(QString filename)
 		quint64 off = 0;
 		while(len > 0) {
 			int res = in.readRawData((char *)m.data + off, len < bs ? len : bs);
+			assert(res > 0);
 			len -= res;
 			off += res;
 		}

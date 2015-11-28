@@ -35,7 +35,10 @@ public slots:
 	static void oxfordSpatialRerank();
 	static void oxfordCreateSoft();
 	static void getAP(const QString &resultsFile, const QString &predictInputs, const QString &categories);
+	static float getAcc(const QString &resultsFile, const QString &predictInputs, QHash<int, float> &perClassAcc);
 	static void toVOCKit(const QString &path);
+
+
 };
 
 #endif // SNIPPETS_H

@@ -1,10 +1,42 @@
 #include "mainwindow.h"
 #include "snippets.h"
+#include "imps/caltechbench.h"
+#include "lmm/classificationpipeline.h"
 
+#include <QDir>
 #include <QDebug>
 #include <QApplication>
 
 #include <stdio.h>
+
+static const QMap<QString, QString> parseArgs(int &argc, char **argv)
+{
+	QMap<QString, QString> args;
+	args.insert("app", QString::fromLatin1(argv[0]));
+	QStringList files;
+	QString cmd;
+	for (int i = 1; i < argc; i++) {
+		QString arg = QString::fromLatin1(argv[i]);
+		cmd.append(arg).append(" ");
+		if (!arg.startsWith("--") && !arg.startsWith("-")) {
+			files << arg;
+			continue;
+		}
+		QString pars;
+		if (i + 1 < argc)
+			pars = QString::fromLatin1(argv[i + 1]);
+		if (!pars.startsWith("--") && !pars.startsWith("-")) {
+			i++;
+			args.insert(arg, pars);
+			cmd.append(pars).append(" ");
+		} else
+			args.insert(arg, "");
+	}
+	args.insert("__app__", QString::fromLatin1(argv[0]));
+	args.insert("__cmd__", cmd);
+	args.insert("__files__", files.join("\n"));
+	return args;
+}
 
 static void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -26,14 +58,123 @@ static void myMessageOutput(QtMsgType type, const QMessageLogContext &context, c
 		abort();
 	}
 }
-#include "imps/caltechbench.h"
+#include "common.h"
+#define parDbg(_x) qDebug() << #_x << pars._x
+#define setParInt(_x) if (flds[0] == #_x) { pars._x = flds[1].toInt(); parDbg(_x); }
+#define setParInt64(_x) if (flds[0] == #_x) { pars._x = flds[1].toLongLong(); parDbg(_x); }
+#define setParDbl(_x) if (flds[0] == #_x) { pars._x = flds[1].toDouble(); parDbg(_x); }
+#define setParStr(_x) if (flds[0] == #_x) { pars._x = flds[1]; parDbg(_x); }
+#define setParEnum(_x, _y) if (flds[0] == #_x) { pars._x = (_y)flds[1].toInt(); parDbg(_x); }
+
+#define setAllPars() \
+	setParEnum(ft, ClassificationPipeline::ftype); \
+	setParInt(xStep); \
+	setParInt(yStep); \
+	setParInt(exportData); \
+	setParInt(threads); \
+	setParInt(K); \
+	setParInt(dictSubSample); \
+	setParInt(useExisting); \
+	setParInt(createDict); \
+	setParStr(dataPath); \
+	setParDbl(gamma); \
+	setParInt(trainCount); \
+	setParInt(testCount); \
+	setParInt(L); \
+	setParInt64(maxMemBytes); \
+	setParInt(maxFeaturesPerImage); \
+	setParInt(useExistingTrainSet); \
+	setParStr(datasetPath); \
+	setParStr(datasetName); \
+
+static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[])
+{
+	QApplication a(argc, argv);
+	QDir::setCurrent(a.applicationDirPath());
+	ClassificationPipeline *pl;
+	if (args.contains("--conf")) {
+		assert(QFile::exists(args["--conf"]));
+		QStringList lines = Common::importText(args["--conf"]);
+		ClassificationPipeline::parameters pars;
+		foreach (QString line, lines) {
+			if (!line.contains("="))
+				continue;
+			line.trimmed();
+			line.remove(";");
+			line.remove("\"");
+			line.remove("pars.");
+			QStringList flds = line.split("=");
+			flds[0] = flds[0].trimmed();
+			flds[1] = flds[1].trimmed();
+			if (flds[1] == "true")
+				flds[1] = "1";
+			if (flds[1] == "false")
+				flds[1] = "0";
+			if (flds[1] == "FEAT_SIFT")
+				flds[1] = "0";
+			if (flds[1] == "FEAT_SURF")
+				flds[1] = "1";
+			setAllPars();
+		}
+		/* check command line parameters */
+		QMapIterator<QString, QString> mi(args);
+		while (mi.hasNext()) {
+			mi.next();
+			QStringList flds;
+			QString key = mi.key();
+			key.remove("--");
+			flds << key;
+			flds << mi.value().trimmed();
+			setAllPars();
+		}
+		pl = new ClassificationPipeline(pars);
+	} else
+		pl = new ClassificationPipeline;
+	pl->start();
+	return a.exec();
+}
+
+static void accTemp()
+{
+	QString tmp = "";
+	QDir d(QString("/home/caglar/myfs/source-codes/personal/build_x86/videoai/dataset2/%1/").arg(tmp));
+	QStringList results = d.entryList(QStringList() << "*.res", QDir::Files);
+	QHash<QString, float> best;
+	QHash<QString, QStringList> bestPars;
+	for (int i = 0; i < results.size(); i++) {
+		QString rfile = d.filePath(results[i]);
+		QString pfile = d.filePath(results[i]).replace(".res", ".txt").replace("_train_", "_test_");
+		QStringList flds = results[i].remove(".res").split("_");
+		flds.removeFirst();
+		flds.removeFirst();
+		//qDebug() << flds[2] << flds[3] << flds[4] << flds[5] << flds[6];
+		QHash<int, float> perClassAcc;
+		float acc = Snippets::getAcc(rfile, pfile, perClassAcc);
+		if (acc > best[flds[0]]) {
+			best[flds[0]] = acc;
+			bestPars[flds[0]] = flds;
+		}
+		qDebug() << perClassAcc;
+	}
+	qDebug() << best << bestPars;
+}
+
 int main(int argc, char *argv[])
 {
 	qInstallMessageHandler(myMessageOutput);
 
+	QMap<QString, QString> args = parseArgs(argc, argv);
+	if (args["__app__"].contains("pipeline"))
+		return pipelineImp(args, argc, argv);
+
+	accTemp();
+	/*Snippets::getAcc("/home/caglar/myfs/source-codes/personal/build_x86/videoai/dataset2/svm_train_ftype0_K2048_step3_L2_gamma0.01.res",
+					"/home/caglar/myfs/source-codes/personal/build_x86/videoai/dataset2/svm_test_ftype1_K2048_step3_L2_gamma0.01.txt");
+					//"/home/caglar/myfs/source-codes/personal/build_x86/videoai/dataset2/cats");*/
+	return 0;
+
 	//CaltechBench::createImageFeatures();
 	//CaltechBench::createDictionary(512, 1000);
-	//return 0;
 
 	int flags = 0x3; /* 1: pyramids, 2: rbow 3: both */
 	int K = 512;

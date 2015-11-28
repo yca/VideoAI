@@ -647,6 +647,40 @@ void Snippets::getAP(const QString &resultsFile, const QString &predictInputs, c
 	qDebug("mean average precision is %f", map / ccnt);
 }
 
+float Snippets::getAcc(const QString &resultsFile, const QString &predictInputs, QHash<int, float> &perClassAcc)
+{
+	QList<QHash<int, float> > probs;
+	QList<int> results;// = readSvmResults(resultsFile, probs);
+	QStringList lines = Common::importText(resultsFile);
+	foreach (QString line, lines)
+		results << line.toInt();
+	QList<int> truth = getPredictInputs(predictInputs);
+	QHash<int, int> ctotal, ccorrect;
+	int total = 0, correct = 0;
+	for (int i = 0; i < results.size(); i++) {
+		if (i >= truth.size())
+			break;
+		if (results[i] == truth[i])
+			correct++;
+		total++;
+
+		int cl = truth[i];
+		ctotal[cl]++;
+		if (results[i] == truth[i])
+			ccorrect[cl]++;
+	}
+	QHashIterator<int, int> hi(ctotal);
+	double accpc = 0;
+	while (hi.hasNext()) {
+		hi.next();
+		double acc = (double)ccorrect[hi.key()] / hi.value() * 100;
+		perClassAcc.insert(hi.key(), acc);
+		accpc +=  acc / ctotal.size();
+	}
+	return accpc;
+	//ffDebug() << (double)correct / total * 100 << accpc << ctotal.size();
+}
+
 void Snippets::toVOCKit(const QString &path)
 {
 	QStringList cats = getVOCCategories();
