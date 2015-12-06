@@ -25,7 +25,6 @@ SOURCES += main.cpp\
     datasetmanager.cpp \
     vision/pyramids.cpp \
     opencv/opencv.cpp \
-    debug.cpp \
     windowmanager.cpp \
     scriptmanager.cpp \
     common.cpp \
@@ -38,8 +37,7 @@ SOURCES += main.cpp\
     vision/pyramidsvl.cpp \
     imps/oxfordretrieval.cpp \
     imps/caltechbench.cpp \
-    lmm/classificationpipeline.cpp \
-    opencv/cvbuffer.cpp
+    caffe/caffecnn.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -50,7 +48,6 @@ HEADERS  += mainwindow.h \
     datasetmanager.h \
     vision/pyramids.h \
     opencv/opencv.h \
-    debug.h \
     windowmanager.h \
     scriptmanager.h \
     common.h \
@@ -63,8 +60,7 @@ HEADERS  += mainwindow.h \
     vision/pyramidsvl.h \
     imps/oxfordretrieval.h \
     imps/caltechbench.h \
-    lmm/classificationpipeline.h \
-    opencv/cvbuffer.h
+    caffe/caffecnn.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
@@ -72,7 +68,7 @@ FORMS    += mainwindow.ui \
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 vlfeat lmm
+CONFIG += opencv2 vlfeat lmm caffe cuda
 
 opencv2 {
     INCLUDEPATH += /usr/include/opencv
@@ -121,6 +117,25 @@ vlfeat {
 lmm {
     include($$INSTALL_PREFIX/usr/local/include/lmm/lmm.pri)
     DEFINES += HAVE_LMM
+    SOURCES += lmm/classificationpipeline.cpp opencv/cvbuffer.cpp
+    HEADERS += lmm/classificationpipeline.h opencv/cvbuffer.h
+} else {
+    SOURCES += debug.cpp
+    HEADERS += debug.h
+}
+
+caffe {
+    INCLUDEPATH += /home/amenmd/myfs/tasks/cuda/caffe_master/caffe/distribute/include/
+    LIBS += -L/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/distribute/lib -lcaffe
+    LIBS += -lglog -lgflags -lprotobuf
+    LIBS += -lboost_system -lboost_thread -lhdf5 -lhdf5_cpp -lhdf5_hl
+    LIBS += -L/usr/lib64/atlas -lsatlas
+    DEFINES += HAVE_CAFFE
+}
+
+cuda {
+    INCLUDEPATH += /usr/local/cuda/include
+    LIBS += -L/usr/local/cuda/lib64 -lcuda -lcudart -lcublas -lcurand -lcudnn
 }
 
 LIBS += -L/usr/lib/libblas -lblas
