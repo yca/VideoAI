@@ -22,7 +22,9 @@ public slots:
 	QStringList availableDatasets();
 	QStringList allImages();
 	QStringList dataSetImages(const QString &dataset);
+	QStringList datasetCategories(const QString &dataset);
 	QString getImage(int pos);
+	QString getCategory(const QString &image);
 
 	static QList<QPair<int, QString> > voc2007GetImagesForCateogory(const QString &path, QString key, QString cat);
 	static void parseOxfordFeatures(const QString &path, const QString &ftPath, vector<vector<KeyPoint> > &kpts, vector<Mat> &features, vector<Mat> &ids);

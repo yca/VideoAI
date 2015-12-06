@@ -137,9 +137,31 @@ QStringList DatasetManager::dataSetImages(const QString &dataset)
 	return datasets[dataset];
 }
 
+QStringList DatasetManager::datasetCategories(const QString &dataset)
+{
+	if (!dataset.contains(dataset))
+		return QStringList();
+	QStringList cats;
+	QStringList images = datasets[dataset];
+	for (int i = 0; i < images.size(); i++) {
+		QString iname = images[i];
+		QFileInfo fi(iname);
+		QString cat = fi.dir().dirName();
+		if (!cats.contains(cat))
+			cats << cat;
+	}
+	return cats;
+}
+
 QString DatasetManager::getImage(int pos)
 {
 	return datasets[currentDataset][pos];
+}
+
+QString DatasetManager::getCategory(const QString &image)
+{
+	QFileInfo fi(image);
+	return fi.dir().dirName();
 }
 
 QList<QPair<int, QString> > DatasetManager::voc2007GetImagesForCateogory(const QString &path, QString key, QString cat)
