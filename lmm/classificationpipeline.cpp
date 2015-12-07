@@ -4,6 +4,7 @@
 #include "vision/pyramids.h"
 #include "vlfeat/vlfeat.h"
 #include "common.h"
+#include "caffe/caffecnn.h"
 
 #include <lmm/debug.h>
 #include <lmm/baselmmpipeline.h>
@@ -23,12 +24,6 @@
 using namespace xfeatures2d;
 #endif
 
-//#define DPATH "/home/caglar/myfs/tasks/video_analysis/data/101_ObjectCategories/"
-//#define DATASET "caltech"
-
-//#define DPATH "/home/caglar/myfs/tasks/video_analysis/data/odtu/annotation/dataset/"
-//#define DATASET "odtu"
-
 #define createEl(_func, _priv) new OpElement<ClassificationPipeline>(this, &ClassificationPipeline::_func, _priv,  #_func)
 #define createEl2(_func) new OpSrcElement<ClassificationPipeline>(this, &ClassificationPipeline::_func, #_func)
 
@@ -42,6 +37,8 @@ public:
 
 	Pyramids *py;
 	VlHomogeneousKernelMap *map;
+	CaffeCnn *c;
+	QStringList inetCats;
 };
 
 struct TrainInfo
@@ -101,6 +98,8 @@ ClassificationPipeline::ClassificationPipeline(QObject *parent) :
 	pars.maxFeaturesPerImage = 0;
 	pars.maxMemBytes = (quint64)1024 * 1024 * 1024 * 2;
 	pars.useExistingTrainSet = true;
+	pars.cl = CLASSIFY_BOW;
+	pars.imFlags = IMREAD_GRAYSCALE;
 
 	init();
 }
@@ -129,7 +128,7 @@ const RawBuffer ClassificationPipeline::readNextImage()
 			index = imageCount - images.size();
 			iname = images.takeFirst();
 		}
-		CVBuffer buf(OpenCV::loadImage(iname));
+		CVBuffer buf(OpenCV::loadImage(iname, pars.imFlags));
 		buf.pars()->metaData = iname.toUtf8();
 		buf.pars()->streamBufferNo = index;
 		buf.pars()->videoWidth = buf.getReferenceMat().cols;
@@ -314,6 +313,89 @@ RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
 	return buf;
 }
 
+static int histCount(int L)
+{
+	int binCount = 0;
+	for (int i = 0; i <= L; i++)
+		binCount += pow(4, i);
+	return binCount;
+}
+
+RawBuffer ClassificationPipeline::cnnClassify(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	tdlock.lock();
+	CaffeCnn *c = NULL;
+	QStringList icats;
+	if (priv < threadsData.size()) {
+		c = threadsData[priv]->c;
+		icats = threadsData[priv]->inetCats;
+		if (!c) {
+			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
+			c = new CaffeCnn;
+			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
+				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
+				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
+				   cbase + "data/ilsvrc12/synset_words.txt");
+			threadsData[priv]->c = c;
+		}
+	}
+	tdlock.unlock();
+	if (!c)
+		return buf;
+
+	int N = 100;
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	QString fname = imname.replace(".jpg", ".cnn");
+	QFileInfo fi(imname);
+	fname = QString("%1/%2_L%3.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.L).arg("cnn");
+
+	QStringList cats;
+	int hcnt = histCount(pars.L);
+	/* use existing ones if exists */
+	if (pars.useExisting && QFile::exists(fname))
+		cats = Common::importText(fname);
+	else {
+		const Mat &img = cbuf->getReferenceMat();
+
+		/*
+		 * in case of L=0 following loop reduces to:
+		 *		cats = c->classify(img, N);
+		 */
+		for (int i = 0; i <= pars.L; i++) {
+			int cnt = pow(2, i);
+			int w = img.cols / cnt;
+			int h = img.rows / cnt;
+			for (int j = 0; j < cnt * cnt; j++) {
+				int x = (j % cnt) * w;
+				int y = (j / cnt) * h;
+				const Mat &sub = img(Rect(x, y, w, h));
+				cats << c->classify(sub, N);
+			}
+		}
+
+		if (pars.exportData)
+			Common::exportText(cats.join("\n"), fname);
+	}
+
+	Mat desc = Mat::zeros(1, icats.size() * hcnt, CV_32F);
+	for (int i = 0; i < cats.size(); i++) {
+		QStringList flds = cats[i].split(" ");
+		assert(flds.size() > 2);
+		float val = flds.last().toFloat();
+		int col = icats.indexOf(flds.first().trimmed());
+		assert(col >= 0);
+		int hist = i / N;
+		desc.at<float>(0, hist * icats.size() + col) +=  val;
+	}
+	desc /= OpenCV::getL1Norm(desc);
+	return createNewBuffer(desc, buf);
+}
+
 void ClassificationPipeline::pipelineFinished()
 {
 	if (pars.createDict) {
@@ -357,8 +439,10 @@ void ClassificationPipeline::init()
 	/* create processing pipeline */
 	if (pars.createDict)
 		createDictPipeline();
-	else
-		createClassificationPipeline();
+	else if (pars.cl == CLASSIFY_BOW)
+		createBOWPipeline();
+	else if (pars.cl == CLASSIFY_CNN)
+		createCNNPipeline();
 
 	if (!pars.createDict) {
 		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
@@ -369,6 +453,20 @@ void ClassificationPipeline::init()
 			data->py->setDict(dict);
 			data->map =  vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, pars.gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
 			threadsData << data;
+
+			if (pars.cl == CLASSIFY_CNN) {
+				data->c = NULL;
+				/* extract imagenet classes */
+				QStringList lines = Common::importText("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/data/ilsvrc12/synset_words.txt");
+				QStringList icats;
+				foreach (const QString &line, lines) {
+					QStringList flds = line.split(" ");
+					if (flds.size() < 2)
+						continue;
+					icats << flds.first().trimmed();
+				}
+				data->inetCats = icats;
+			}
 		}
 
 		QString trainSetFileName = QString("%1/train_set.txt")
@@ -388,62 +486,7 @@ void ClassificationPipeline::init()
 			assert(trainInfo.size() == imageCount);
 		} else {
 			/* split into train/test */
-			QStringList cats;
-			Mat labels(images.size(), 1, CV_32F);
-			Mat classPos(images.size(), 1, CV_32F);
-			int cp = 0;
-			QHash<int, int> sampleCount;
-			for (int i = 0; i < images.size(); i++) {
-				QString iname = images[i];
-
-				/* find label */
-				QFileInfo fi(iname);
-				QString cat = fi.dir().dirName();
-				if (!cats.contains(cat)) {
-					cp = 0;
-					cats << cat;
-				}
-				int l = cats.indexOf(cat) + 1;
-				labels.at<float>(i) = l;
-				sampleCount[l]++;
-				classPos.at<float>(i) = cp++;
-			}
-
-			int trcnt = pars.trainCount;
-			int tscnt = pars.testCount;
-			int total = trcnt + tscnt;
-			vector<Mat> trainSet, testSet;
-			for (int i = 0; i < cats.size(); i++) {
-				int cnt = sampleCount[i + 1];
-				Mat idx = OpenCV::createRandomized(0, cnt);
-				/* special case: if trcnt = -1 and tscnt = 0, all will be used for training */
-				if (trcnt > 0)
-					trainSet.push_back(idx.rowRange(0, trcnt));
-				else
-					trainSet.push_back(idx);
-				if (tscnt > 0)
-					testSet.push_back(idx.rowRange(trcnt, idx.rows > total ? total : idx.rows));
-			}
-
-			QStringList lines;
-			for (int i = 0; i < images.size(); i++) {
-				TrainInfo *info = new TrainInfo;
-				info->useForTrain = info->useForTest = false;
-
-				int label = labels.at<float>(i);
-				info->label = label;
-				const Mat &mt = trainSet[label - 1];
-				const Mat &me = testSet[label - 1];
-				int cp = classPos.at<float>(i);
-				if (OpenCV::matContains(mt, cp))
-					info->useForTrain = true;
-				else if (OpenCV::matContains(me, cp))
-					info->useForTest = true;
-				trainInfo << info;
-				lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
-			}
-			lines << "";
-			Common::exportText(lines.join("\n"), trainSetFileName);
+			createTrainTestSplit(trainSetFileName);
 		}
 
 		trainFile = new QFile(QString("%1/svm_train_ftype%2_K%3_step%4_L%5_gamma%6.txt")
@@ -488,7 +531,7 @@ void ClassificationPipeline::createDictPipeline()
 	//p1->end();
 }
 
-void ClassificationPipeline::createClassificationPipeline()
+void ClassificationPipeline::createBOWPipeline()
 {
 	BaseLmmPipeline *p1 = addPipeline();
 	p1->append(createEl2(readNextImage));
@@ -504,6 +547,76 @@ void ClassificationPipeline::createClassificationPipeline()
 	}
 	p1->appendJoin(createEl(exportForSvm, 0), join1);
 	p1->end();
+}
+
+void ClassificationPipeline::createCNNPipeline()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	p1->append(createEl(cnnClassify, 0));
+	p1->append(createEl(mapDescriptor, 0));
+	p1->append(createEl(exportForSvm, 0));
+	p1->end();
+}
+
+void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileName)
+{
+	QStringList cats;
+	Mat labels(images.size(), 1, CV_32F);
+	Mat classPos(images.size(), 1, CV_32F);
+	int cp = 0;
+	QHash<int, int> sampleCount;
+	for (int i = 0; i < images.size(); i++) {
+		QString iname = images[i];
+
+		/* find label */
+		QFileInfo fi(iname);
+		QString cat = fi.dir().dirName();
+		if (!cats.contains(cat)) {
+			cp = 0;
+			cats << cat;
+		}
+		int l = cats.indexOf(cat) + 1;
+		labels.at<float>(i) = l;
+		sampleCount[l]++;
+		classPos.at<float>(i) = cp++;
+	}
+
+	int trcnt = pars.trainCount;
+	int tscnt = pars.testCount;
+	int total = trcnt + tscnt;
+	vector<Mat> trainSet, testSet;
+	for (int i = 0; i < cats.size(); i++) {
+		int cnt = sampleCount[i + 1];
+		Mat idx = OpenCV::createRandomized(0, cnt);
+		/* special case: if trcnt = -1 and tscnt = 0, all will be used for training */
+		if (trcnt > 0)
+			trainSet.push_back(idx.rowRange(0, trcnt));
+		else
+			trainSet.push_back(idx);
+		if (tscnt > 0)
+			testSet.push_back(idx.rowRange(trcnt, idx.rows > total ? total : idx.rows));
+	}
+
+	QStringList lines;
+	for (int i = 0; i < images.size(); i++) {
+		TrainInfo *info = new TrainInfo;
+		info->useForTrain = info->useForTest = false;
+
+		int label = labels.at<float>(i);
+		info->label = label;
+		const Mat &mt = trainSet[label - 1];
+		const Mat &me = testSet[label - 1];
+		int cp = classPos.at<float>(i);
+		if (OpenCV::matContains(mt, cp))
+			info->useForTrain = true;
+		else if (OpenCV::matContains(me, cp))
+			info->useForTest = true;
+		trainInfo << info;
+		lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
+	}
+	lines << "";
+	Common::exportText(lines.join("\n"), trainSetFileName);
 }
 
 QString ClassificationPipeline::getExportFilename(const QString &imname, const QString &suffix)

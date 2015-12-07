@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "common.h"
 #include "snippets.h"
 #include "imps/caltechbench.h"
 #include "lmm/classificationpipeline.h"

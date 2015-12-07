@@ -11,6 +11,7 @@
 #include <errno.h>
 
 #include <QSemaphore>
+#include <QStringList>
 
 class QFile;
 class TrainInfo;
@@ -88,6 +89,10 @@ public:
 		FEAT_SIFT,
 		FEAT_SURF,
 	};
+	enum cltype {
+		CLASSIFY_BOW,
+		CLASSIFY_CNN,
+	};
 
 	struct parameters {
 		ftype ft;
@@ -109,6 +114,8 @@ public:
 		bool useExistingTrainSet;
 		QString datasetPath;
 		QString datasetName;
+		cltype cl;
+		int imFlags;
 	};
 	parameters pars;
 
@@ -123,6 +130,7 @@ public:
 	virtual RawBuffer createImageDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer mapDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer exportForSvm(const RawBuffer &buf, int priv);
+	virtual RawBuffer cnnClassify(const RawBuffer &buf, int priv);
 signals:
 
 protected slots:
@@ -130,7 +138,9 @@ protected slots:
 protected:
 	void init();
 	void createDictPipeline();
-	void createClassificationPipeline();
+	void createBOWPipeline();
+	void createCNNPipeline();
+	void createTrainTestSplit(const QString &trainSetFileName);
 	QString getExportFilename(const QString &imname, const QString &suffix);
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
 	std::vector<cv::KeyPoint> extractKeypoints(const cv::Mat &m);
