@@ -4,6 +4,11 @@
 #include <QObject>
 #include <QStringList>
 
+#include <opencv2/opencv.hpp>
+
+using namespace cv;
+using namespace std;
+
 class CaffeCnnPriv;
 
 class CaffeCnn : public QObject
@@ -15,6 +20,7 @@ public:
 	int load(const QString &modelFile, const QString &trainedFile, const QString &meanFile, const QString &labelFile);
 	int setMean(const QString &meanFile);
 	QStringList classify(const QString &filename, int N = 5);
+	QStringList classify(const Mat &img, int N = 5);
 signals:
 
 public slots:

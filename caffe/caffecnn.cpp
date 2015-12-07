@@ -186,7 +186,12 @@ int CaffeCnn::setMean(const QString &meanFile)
 
 QStringList CaffeCnn::classify(const QString &filename, int N)
 {
-	Mat img = imread(qPrintable(filename), -1);
+	Mat img = imread(qPrintable(filename), IMREAD_UNCHANGED);
+	return classify(img, N);
+}
+
+QStringList CaffeCnn::classify(const Mat &img, int N)
+{
 	std::vector<float> output = predict(img, p);
 	N = std::min<int>(p->labels.size(), N);
 	std::vector<int> maxN = argmax(output, N);
