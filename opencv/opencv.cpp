@@ -75,9 +75,9 @@ void OpenCV::saveImage(const QString &filename, const Mat &m)
 	imwrite(qPrintable(filename), m);
 }
 
-Mat OpenCV::loadImage(const QString &filename)
+Mat OpenCV::loadImage(const QString &filename, int flags)
 {
-	return imread(qPrintable(filename), IMREAD_GRAYSCALE);
+	return imread(qPrintable(filename), flags);
 }
 
 void OpenCV::printMatInfo(const Mat &m)
