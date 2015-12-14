@@ -92,6 +92,7 @@ public:
 	enum cltype {
 		CLASSIFY_BOW,
 		CLASSIFY_CNN,
+		CLASSIFY_CNN_FC7,
 	};
 
 	struct parameters {
@@ -123,6 +124,7 @@ public:
 	explicit ClassificationPipeline(const struct parameters &params, QObject *parent = 0);
 
 	virtual const RawBuffer readNextImage();
+	virtual const RawBuffer readNextLMDBImageFeature();
 	virtual RawBuffer detectKeypoints(const RawBuffer &buf, int priv);
 	virtual RawBuffer extractFeatures(const RawBuffer &buf, int priv);
 	virtual RawBuffer addToDictPool(const RawBuffer &buf, int priv);
@@ -140,6 +142,7 @@ protected:
 	void createDictPipeline();
 	void createBOWPipeline();
 	void createCNNPipeline();
+	void createCNNFC7Pipeline();
 	void createTrainTestSplit(const QString &trainSetFileName);
 	QString getExportFilename(const QString &imname, const QString &suffix);
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);

@@ -137,6 +137,38 @@ const RawBuffer ClassificationPipeline::readNextImage()
 	}
 }
 
+const RawBuffer ClassificationPipeline::readNextLMDBImageFeature()
+{
+	tdlock.lock();
+	CaffeCnn *c = NULL;
+	c = threadsData[0]->c;
+	if (!c) {
+		QString filename = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/_temp/features/";
+		c = new CaffeCnn;
+		c->load(filename);
+		threadsData[0]->c = c;
+	}
+	tdlock.unlock();
+	if (!c)
+		return RawBuffer(this);
+
+	while (1) {
+		QString key;
+		Mat m = c->readNextFeature(key);
+		int ino = key.toInt();
+		if (!m.rows)
+			return RawBuffer(this);
+		if (trainInfo.size() && trainInfo[ino]->useForTrain == false && trainInfo[ino]->useForTest == false)
+			continue;
+		CVBuffer buf(m);
+		buf.pars()->metaData = QString("%1").arg(key).toUtf8();
+		buf.pars()->streamBufferNo = ino;
+		buf.pars()->videoWidth = m.cols;
+		buf.pars()->videoHeight = m.rows;
+		return buf;
+	}
+}
+
 RawBuffer ClassificationPipeline::detectKeypoints(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
@@ -443,6 +475,18 @@ void ClassificationPipeline::init()
 		createBOWPipeline();
 	else if (pars.cl == CLASSIFY_CNN)
 		createCNNPipeline();
+	else if (pars.cl == CLASSIFY_CNN_FC7) {
+		QStringList lines = Common::importText("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/_temp/file_list.txt");
+		images.clear();
+		foreach (const QString &line, lines) {
+			QStringList flds = line.split(" ");
+			if (flds.size() < 2)
+				continue;
+			images << flds.first();
+		}
+		assert(images.size() == imageCount);
+		createCNNFC7Pipeline();
+	}
 
 	if (!pars.createDict) {
 		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
@@ -453,9 +497,9 @@ void ClassificationPipeline::init()
 			data->py->setDict(dict);
 			data->map =  vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, pars.gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
 			threadsData << data;
+			data->c = NULL;
 
 			if (pars.cl == CLASSIFY_CNN) {
-				data->c = NULL;
 				/* extract imagenet classes */
 				QStringList lines = Common::importText("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/data/ilsvrc12/synset_words.txt");
 				QStringList icats;
@@ -466,6 +510,7 @@ void ClassificationPipeline::init()
 					icats << flds.first().trimmed();
 				}
 				data->inetCats = icats;
+			} else if (pars.cl == CLASSIFY_CNN_FC7) {
 			}
 		}
 
@@ -555,6 +600,14 @@ void ClassificationPipeline::createCNNPipeline()
 	p1->append(createEl2(readNextImage));
 	p1->append(createEl(cnnClassify, 0));
 	p1->append(createEl(mapDescriptor, 0));
+	p1->append(createEl(exportForSvm, 0));
+	p1->end();
+}
+
+void ClassificationPipeline::createCNNFC7Pipeline()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextLMDBImageFeature));
 	p1->append(createEl(exportForSvm, 0));
 	p1->end();
 }
