@@ -18,9 +18,11 @@ public:
 	explicit CaffeCnn(QObject *parent = 0);
 
 	int load(const QString &modelFile, const QString &trainedFile, const QString &meanFile, const QString &labelFile);
+	int load(const QString &lmdbFolder);
 	int setMean(const QString &meanFile);
 	QStringList classify(const QString &filename, int N = 5);
 	QStringList classify(const Mat &img, int N = 5);
+	Mat readNextFeature(QString &key);
 signals:
 
 public slots:

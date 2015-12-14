@@ -1,11 +1,17 @@
 #include "caffecnn.h"
+#include "debug.h"
+
+#define USE_LMDB
 
 #include <caffe/caffe.hpp>
+#include <caffe/util/db.hpp>
 #include <opencv2/opencv.hpp>
+#include <caffe/util/db_lmdb.hpp>
 
 using namespace cv;
 using namespace std;
 using namespace caffe;
+using namespace db;
 
 typedef std::pair<string, float> Prediction;
 
@@ -16,6 +22,8 @@ public:
 	int channelCount;
 	Mat mean;
 	Size inputGeometry;
+	LMDB *imdb;
+	LMDBCursor *dbCursor;
 };
 
 static bool PairCompare(const std::pair<float, int>& lhs, const std::pair<float, int>& rhs)
@@ -152,6 +160,14 @@ int CaffeCnn::load(const QString &modelFile, const QString &trainedFile, const Q
 	return setMean(meanFile);
 }
 
+int CaffeCnn::load(const QString &lmdbFolder)
+{
+	p->imdb = new LMDB;
+	p->imdb->Open(lmdbFolder.toStdString(), db::READ);
+	p->dbCursor = p->imdb->NewCursor();
+	return 0;
+}
+
 int CaffeCnn::setMean(const QString &meanFile)
 {
 	BlobProto blobProto;
@@ -211,5 +227,19 @@ QStringList CaffeCnn::classify(const Mat &img, int N)
 				  << p.first << "\"" << std::endl;
 	}
 	return list;
+}
+
+Mat CaffeCnn::readNextFeature(QString &key)
+{
+	if (!p->dbCursor->valid())
+		return Mat();
+	Datum d;
+	d.ParseFromString(p->dbCursor->value());
+	key.append(QString::fromStdString(p->dbCursor->key()));
+	Mat m(1, d.float_data_size(), CV_32F);
+	for (int i = 0; i < d.float_data_size(); i++)
+		m.at<float>(0, i) = d.float_data(i);
+	p->dbCursor->Next();
+	return m;
 }
 
