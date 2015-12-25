@@ -117,6 +117,10 @@ public:
 		QString datasetName;
 		cltype cl;
 		int imFlags;
+		QString fileListTxt;
+		QString trainListTxt;
+		QString testListTxt;
+		QString lmdbFeaturePath;
 	};
 	parameters pars;
 

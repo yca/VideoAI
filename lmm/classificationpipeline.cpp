@@ -143,7 +143,7 @@ const RawBuffer ClassificationPipeline::readNextLMDBImageFeature()
 	CaffeCnn *c = NULL;
 	c = threadsData[0]->c;
 	if (!c) {
-		QString filename = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/_temp/features/";
+		QString filename = pars.lmdbFeaturePath;
 		c = new CaffeCnn;
 		c->load(filename);
 		threadsData[0]->c = c;
@@ -158,6 +158,8 @@ const RawBuffer ClassificationPipeline::readNextLMDBImageFeature()
 		int ino = key.toInt();
 		if (!m.rows)
 			return RawBuffer(this);
+		if (ino >= trainInfo.size())
+			continue;
 		if (trainInfo.size() && trainInfo[ino]->useForTrain == false && trainInfo[ino]->useForTest == false)
 			continue;
 		CVBuffer buf(m);
@@ -468,15 +470,8 @@ void ClassificationPipeline::init()
 	QDir d = QDir::current();
 	d.mkpath(pars.dataPath);
 
-	/* create processing pipeline */
-	if (pars.createDict)
-		createDictPipeline();
-	else if (pars.cl == CLASSIFY_BOW)
-		createBOWPipeline();
-	else if (pars.cl == CLASSIFY_CNN)
-		createCNNPipeline();
-	else if (pars.cl == CLASSIFY_CNN_FC7) {
-		QStringList lines = Common::importText("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/_temp/file_list.txt");
+	if (!pars.fileListTxt.isEmpty()) {
+		QStringList lines = Common::importText(pars.fileListTxt);
 		images.clear();
 		foreach (const QString &line, lines) {
 			QStringList flds = line.split(" ");
@@ -485,6 +480,16 @@ void ClassificationPipeline::init()
 			images << flds.first();
 		}
 		assert(images.size() == imageCount);
+	}
+
+	/* create processing pipeline */
+	if (pars.createDict)
+		createDictPipeline();
+	else if (pars.cl == CLASSIFY_BOW)
+		createBOWPipeline();
+	else if (pars.cl == CLASSIFY_CNN)
+		createCNNPipeline();
+	else if (pars.cl == CLASSIFY_CNN_FC7) {
 		createCNNFC7Pipeline();
 	}
 
@@ -531,7 +536,45 @@ void ClassificationPipeline::init()
 			assert(trainInfo.size() == imageCount);
 		} else {
 			/* split into train/test */
-			createTrainTestSplit(trainSetFileName);
+			if (pars.trainListTxt.isEmpty())
+				createTrainTestSplit(trainSetFileName);
+			else {
+				QHash<QString, int> tthash;
+				QStringList cats;
+				QStringList trainList = Common::importText(pars.trainListTxt);
+				for (int j = 0; j < trainList.size(); j++) {
+					QStringList flds = trainList[j].trimmed().split(" ");
+					QString name = flds[0].remove(".avi");
+					if (name.isEmpty())
+						continue;
+					QStringList vals = name.split("/");
+					if (!cats.contains(vals.first()))
+						cats << vals.first();
+					tthash.insert(vals.last(), 1);
+				}
+				QStringList testList = Common::importText(pars.testListTxt);
+				for (int j = 0; j < testList.size(); j++) {
+					QStringList flds = testList[j].trimmed().split(" ");
+					QString name = flds[0].remove(".avi");
+					if (name.isEmpty())
+						continue;
+					tthash.insert(name.split("/").last(), 2);
+				}
+				for (int i = 0; i < images.size(); i++) {
+					TrainInfo *info = new TrainInfo;
+					info->useForTrain = info->useForTest = false;
+					QFileInfo fi(images[i]);
+					QStringList flds = fi.baseName().split("_");
+					flds.removeLast();
+					int val = tthash[flds.join("_")];
+					if (val == 1)
+						info->useForTrain = true;
+					else if (val == 2)
+						info->useForTest = true;
+					info->label = cats.indexOf(fi.dir().dirName()) + 1;
+					trainInfo << info;
+				}
+			}
 		}
 
 		trainFile = new QFile(QString("%1/svm_train_ftype%2_K%3_step%4_L%5_gamma%6.txt")
