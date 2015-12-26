@@ -3,17 +3,20 @@
 
 #ifdef HAVE_LMM
 
+#include <lmm/debug.h>
 #include <lmm/pipeline/pipelinemanager.h>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 
 #include <errno.h>
+#include <unistd.h>
 
 #include <QSemaphore>
 #include <QStringList>
 
 class QFile;
+class CaffeCnn;
 class TrainInfo;
 class ThreadData;
 class DatasetManager;
@@ -36,6 +39,8 @@ public:
 	virtual int processBuffer(const RawBuffer &buf)
 	{
 		RawBuffer buf2 = (enc->*mfunc)(buf, priv);
+		if (getOutputQueue(0)->getBufferCount() > 1000)
+			usleep(1000 * 100);
 		return newOutputBuffer(0, buf2);
 	}
 
@@ -61,6 +66,8 @@ public:
 	int processBlocking(int ch)
 	{
 		RawBuffer buf = (enc->*mfunc)();
+		if (getOutputQueue(0)->getBufferCount() > 1000)
+			usleep(1000 * 100);
 		return newOutputBuffer(ch, buf);
 	}
 
@@ -88,11 +95,13 @@ public:
 	enum ftype {
 		FEAT_SIFT,
 		FEAT_SURF,
+		FEAT_CNN,
 	};
 	enum cltype {
 		CLASSIFY_BOW,
 		CLASSIFY_CNN,
 		CLASSIFY_CNN_FC7,
+		CLASSIFY_CNN_SVM,
 	};
 
 	struct parameters {
@@ -121,6 +130,10 @@ public:
 		QString trainListTxt;
 		QString testListTxt;
 		QString lmdbFeaturePath;
+		QString cnnFeatureLayer;
+		int debug;
+		int spatialSize;
+		bool homkermap;
 	};
 	parameters pars;
 
@@ -137,6 +150,7 @@ public:
 	virtual RawBuffer mapDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer exportForSvm(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnClassify(const RawBuffer &buf, int priv);
+	virtual RawBuffer cnnExtract(const RawBuffer &buf, int priv);
 signals:
 
 protected slots:
@@ -147,11 +161,13 @@ protected:
 	void createBOWPipeline();
 	void createCNNPipeline();
 	void createCNNFC7Pipeline();
+	void createCNNFSVMPipeline();
 	void createTrainTestSplit(const QString &trainSetFileName);
 	QString getExportFilename(const QString &imname, const QString &suffix);
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
 	std::vector<cv::KeyPoint> extractKeypoints(const cv::Mat &m);
 	cv::Mat computeFeatures(const cv::Mat &m, std::vector<cv::KeyPoint> &keypoints);
+	CaffeCnn * getCurrentThreadCaffe(int priv);
 
 	virtual int pipelineOutput(BaseLmmPipeline *, const RawBuffer &buf);
 

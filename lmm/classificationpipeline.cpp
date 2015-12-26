@@ -56,6 +56,14 @@ static Mat getBow(const Mat &ids, int cols)
 	return py / OpenCV::getL1Norm(py);
 }
 
+static int histCount(int L)
+{
+	int binCount = 0;
+	for (int i = 0; i <= L; i++)
+		binCount += pow(4, i);
+	return binCount;
+}
+
 static RawBuffer createNewBuffer(const vector<KeyPoint> &kpts, const Mat &m, const RawBuffer &buf)
 {
 	CVBuffer c2(kpts);
@@ -347,14 +355,6 @@ RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
 	return buf;
 }
 
-static int histCount(int L)
-{
-	int binCount = 0;
-	for (int i = 0; i <= L; i++)
-		binCount += pow(4, i);
-	return binCount;
-}
-
 RawBuffer ClassificationPipeline::cnnClassify(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
@@ -430,6 +430,36 @@ RawBuffer ClassificationPipeline::cnnClassify(const RawBuffer &buf, int priv)
 	return createNewBuffer(desc, buf);
 }
 
+RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	tdlock.lock();
+	CaffeCnn *c = NULL;
+	if (priv < threadsData.size()) {
+		c = threadsData[priv]->c;
+		if (!c) {
+			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
+			c = new CaffeCnn;
+			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
+				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
+				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
+				   cbase + "data/ilsvrc12/synset_words.txt");
+			threadsData[priv]->c = c;
+		}
+	}
+	tdlock.unlock();
+	if (!c)
+		return buf;
+
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	const Mat &img = cbuf->getReferenceMat();
+
+	return createNewBuffer(c->extract(img, pars.cnnFeatureLayer), buf);
+}
+
 void ClassificationPipeline::pipelineFinished()
 {
 	if (pars.createDict) {
@@ -462,6 +492,8 @@ void ClassificationPipeline::init()
 			fsize = 64;
 		else if (pars.ft == FEAT_SIFT)
 			fsize = 128;
+		else if (pars.ft == FEAT_CNN)
+			fsize = 96;
 		int dsize = fsize * 4;
 		pars.maxFeaturesPerImage = (double)(pars.maxMemBytes) / imageCount / dsize;
 		pars.dictSubSample = 0;
@@ -489,20 +521,27 @@ void ClassificationPipeline::init()
 		createBOWPipeline();
 	else if (pars.cl == CLASSIFY_CNN)
 		createCNNPipeline();
-	else if (pars.cl == CLASSIFY_CNN_FC7) {
+	else if (pars.cl == CLASSIFY_CNN_FC7)
 		createCNNFC7Pipeline();
+	else if (pars.cl == CLASSIFY_CNN_SVM)
+		createCNNFSVMPipeline();
+
+	for (int i = 0; i < pars.threads; i++) {
+		ThreadData *data = new ThreadData;
+		data->py = NULL;
+		data->map =  NULL;
+		data->c = NULL;
+		threadsData << data;
 	}
 
 	if (!pars.createDict) {
 		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
 		dict = OpenCV::importMatrix(fname);
 		for (int i = 0; i < pars.threads; i++) {
-			ThreadData *data = new ThreadData;
+			ThreadData *data = threadsData[i];
 			data->py = new Pyramids;
 			data->py->setDict(dict);
 			data->map =  vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, pars.gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
-			threadsData << data;
-			data->c = NULL;
 
 			if (pars.cl == CLASSIFY_CNN) {
 				/* extract imagenet classes */
@@ -630,7 +669,8 @@ void ClassificationPipeline::createBOWPipeline()
 		p1->append(createEl(extractFeatures, i));
 		p1->append(createEl(createIDs, i));
 		p1->append(createEl(createImageDescriptor, i));
-		p1->append(createEl(mapDescriptor, i));
+		if (pars.homkermap)
+			p1->append(createEl(mapDescriptor, i));
 		join1 << p1->getPipe(p1->getPipeCount() - 1);
 	}
 	p1->appendJoin(createEl(exportForSvm, 0), join1);
@@ -642,7 +682,8 @@ void ClassificationPipeline::createCNNPipeline()
 	BaseLmmPipeline *p1 = addPipeline();
 	p1->append(createEl2(readNextImage));
 	p1->append(createEl(cnnClassify, 0));
-	p1->append(createEl(mapDescriptor, 0));
+	if (pars.homkermap)
+		p1->append(createEl(mapDescriptor, 0));
 	p1->append(createEl(exportForSvm, 0));
 	p1->end();
 }
@@ -651,6 +692,17 @@ void ClassificationPipeline::createCNNFC7Pipeline()
 {
 	BaseLmmPipeline *p1 = addPipeline();
 	p1->append(createEl2(readNextLMDBImageFeature));
+	p1->append(createEl(exportForSvm, 0));
+	p1->end();
+}
+
+void ClassificationPipeline::createCNNFSVMPipeline()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	p1->append(createEl(cnnExtract, 0));
+	if (pars.homkermap)
+		p1->append(createEl(mapDescriptor, 0));
 	p1->append(createEl(exportForSvm, 0));
 	p1->end();
 }
@@ -724,8 +776,20 @@ QString ClassificationPipeline::getExportFilename(const QString &imname, const Q
 std::vector<KeyPoint> ClassificationPipeline::extractDenseKeypoints(const Mat &m, int step)
 {
 	vector<KeyPoint> keypoints;
-	DenseFeatureDetector dec(11.f, 1, 0.1f, step, 0);
-	dec.detect(m, keypoints);
+	if (pars.ft == FEAT_CNN) {
+		for (int i = 0; i < pars.spatialSize; i++) {
+			for (int j = 0; j < pars.spatialSize; j++) {
+				KeyPoint kpt;
+				int step = m.cols / pars.spatialSize;
+				kpt.pt.x = j * step;
+				kpt.pt.y = i * step;
+				keypoints.push_back(kpt);
+			}
+		}
+	} else {
+		DenseFeatureDetector dec(11.f, 1, 0.1f, step, 0);
+		dec.detect(m, keypoints);
+	}
 	return keypoints;
 }
 
@@ -738,6 +802,15 @@ std::vector<KeyPoint> ClassificationPipeline::extractKeypoints(const Mat &m)
 	} else if (pars.ft == FEAT_SURF) {
 		SurfFeatureDetector dec;
 		dec.detect(m, keypoints);
+	} else if (pars.ft == FEAT_CNN) {
+		for (int i = 0; i < 55; i++) {
+			for (int j = 0; j < 55; j++) {
+				KeyPoint kpt;
+				kpt.pt.x = j * 4;
+				kpt.pt.y = i * 4;
+				keypoints.push_back(kpt);
+			}
+		}
 	}
 	return keypoints;
 }
@@ -751,8 +824,32 @@ Mat ClassificationPipeline::computeFeatures(const Mat &m, std::vector<KeyPoint> 
 	} else if (pars.ft == FEAT_SURF) {
 		SurfDescriptorExtractor ex;
 		ex.compute(m, keypoints, features);
+	} else if (pars.ft == FEAT_CNN) {
+		CaffeCnn *c = getCurrentThreadCaffe(0);
+		assert(c != NULL);
+		return c->extract(m, pars.cnnFeatureLayer);
 	}
 	return features;
+}
+
+CaffeCnn *ClassificationPipeline::getCurrentThreadCaffe(int priv)
+{
+	tdlock.lock();
+	CaffeCnn *c = NULL;
+	if (priv < threadsData.size()) {
+		c = threadsData[priv]->c;
+		if (!c) {
+			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
+			c = new CaffeCnn;
+			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
+				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
+				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
+				   cbase + "data/ilsvrc12/synset_words.txt");
+			threadsData[priv]->c = c;
+		}
+	}
+	tdlock.unlock();
+	return c;
 }
 
 int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *, const RawBuffer &buf)
@@ -762,9 +859,12 @@ int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *, const RawBuffer &b
 		ffDebug() << "finished";
 		emit pipelineFinished();
 	}
-	//static int cnt = 0;
-	//if (++cnt % 100 == 0 || cnt > 9140)
-		//ffDebug() << buf.constPars()->streamBufferNo << cnt;
+	if (pars.debug) {
+		static int cnt = 0;
+		//if (++cnt % 100 == 0 || cnt > 9140)
+			//ffDebug() << buf.constPars()->streamBufferNo << cnt;
+		ffDebug() << buf.constPars()->streamBufferNo << cnt++;
+	}
 
 	return 0;
 }
