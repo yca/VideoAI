@@ -23,6 +23,10 @@ public:
 	QStringList classify(const QString &filename, int N = 5);
 	QStringList classify(const Mat &img, int N = 5);
 	Mat readNextFeature(QString &key);
+	Mat extract(const Mat &img, const QString &layerName);
+
+	void printLayerInfo();
+	void printLayerInfo(const QStringList &layers);
 signals:
 
 public slots:

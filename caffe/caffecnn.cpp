@@ -1,5 +1,6 @@
 #include "caffecnn.h"
 #include "debug.h"
+#include "opencv/opencv.h"
 
 #define USE_LMDB
 
@@ -241,5 +242,67 @@ Mat CaffeCnn::readNextFeature(QString &key)
 		m.at<float>(0, i) = d.float_data(i);
 	p->dbCursor->Next();
 	return m;
+}
+
+Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
+{
+	std::vector<float> output = predict(img, p);
+
+	Blob<float>* input_layer = p->net->input_blobs()[0];
+	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
+	/* Forward dimension change to all layers. */
+	p->net->Reshape();
+
+	std::vector<cv::Mat> input_channels;
+	wrapInputLayer(&input_channels, p);
+
+	preprocess(img, &input_channels, p);
+
+	p->net->ForwardPrefilled();
+
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+
+	Mat m(blob->width() * blob->height(), blob->channels(), CV_32F);
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+#if 0
+	int row = 0, off = 0;
+	for (int i = 0; i < blob->width(); i++) {
+		for (int j = 0; j < blob->height(); j++) {
+			for (int k = 0; k < blob->channels(); k++)
+				m.at<float>(row, k) = bdata[off++];
+			m.row(row) = m.row(row) / OpenCV::getL2Norm(m.row(row));
+			row++;
+		}
+	}
+#else
+	for (int i = 0; i < blob->count(); i++) {
+		int row = i % m.rows;
+		int col = i / m.rows;
+		m.at<float>(row, col) = bdata[i];
+	}
+	for (int i = 0; i < m.rows; i++)
+		m.row(i) /= OpenCV::getL2Norm(m.row(i));
+#endif
+	assert(m.rows * m.cols == blob->count());
+	return m;
+}
+
+void CaffeCnn::printLayerInfo()
+{
+	for (uint i = 0; i < p->net->layer_names().size(); i++) {
+		QString layer = QString::fromStdString(p->net->layer_names()[i]);
+		if (layer.startsWith("relu") || layer.startsWith("prob") || layer.startsWith("drop"))
+			continue;
+		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
+		ffDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
+	}
+}
+
+void CaffeCnn::printLayerInfo(const QStringList &layers)
+{
+	foreach (const QString &layer, layers) {
+		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
+		ffDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
+	}
 }
 
