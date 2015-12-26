@@ -120,7 +120,9 @@ Mat Pyramids::makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vect
 	}
 	for (int i = 0; i < hists.rows; i++) {
 		Mat h = hists.row(i);
-		h /= OpenCV::getL1Norm(h);
+		float n1 = OpenCV::getL1Norm(h);
+		if (n1 != 0)
+			h /= n1;
 		h.copyTo(hists.row(i));
 	}
 
