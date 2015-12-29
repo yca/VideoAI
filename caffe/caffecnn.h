@@ -24,6 +24,8 @@ public:
 	QStringList classify(const Mat &img, int N = 5);
 	Mat readNextFeature(QString &key);
 	Mat extract(const Mat &img, const QString &layerName);
+	Mat extractLinear(const Mat &img, const QString &layerName);
+	Mat extract(const Mat &img, const QStringList &layers);
 
 	void printLayerInfo();
 	void printLayerInfo(const QStringList &layers);

@@ -128,8 +128,12 @@ static std::vector<float> predict(const cv::Mat& img, CaffeCnnPriv *p)
 
 CaffeCnn::CaffeCnn(QObject *parent) : QObject(parent)
 {
-	::google::InitGoogleLogging("VideoAi");
-	Caffe::set_mode(Caffe::GPU);
+	static int once = 0;
+	if (!once) {
+		::google::InitGoogleLogging("VideoAi");
+		Caffe::set_mode(Caffe::GPU);
+		once = 1;
+	}
 	p = new CaffeCnnPriv;
 }
 
@@ -155,8 +159,9 @@ int CaffeCnn::load(const QString &modelFile, const QString &trainedFile, const Q
 	p->channelCount = inputLayer->channels();
 	p->inputGeometry = Size(inputLayer->width(), inputLayer->height());
 
-	if (outputLayer->channels() != (int)p->labels.size())
-		return -EINVAL;
+	if (outputLayer->channels() != (int)p->labels.size()) {
+		mDebug("output layer channels and category size mismatch: %d vs %d", outputLayer->channels(), (int)p->labels.size());
+	}
 
 	return setMean(meanFile);
 }
@@ -246,8 +251,6 @@ Mat CaffeCnn::readNextFeature(QString &key)
 
 Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 {
-	std::vector<float> output = predict(img, p);
-
 	Blob<float>* input_layer = p->net->input_blobs()[0];
 	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
 	/* Forward dimension change to all layers. */
@@ -261,9 +264,9 @@ Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 	p->net->ForwardPrefilled();
 
 	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+	const float *bdata = blob->cpu_data() + blob->offset(0);
 
 	Mat m(blob->width() * blob->height(), blob->channels(), CV_32F);
-	const float *bdata = blob->cpu_data() + blob->offset(0);
 #if 0
 	int row = 0, off = 0;
 	for (int i = 0; i < blob->width(); i++) {
@@ -287,14 +290,73 @@ Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 	return m;
 }
 
+Mat CaffeCnn::extractLinear(const Mat &img, const QString &layerName)
+{
+	Blob<float>* input_layer = p->net->input_blobs()[0];
+	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
+	/* Forward dimension change to all layers. */
+	p->net->Reshape();
+
+	std::vector<cv::Mat> input_channels;
+	wrapInputLayer(&input_channels, p);
+
+	preprocess(img, &input_channels, p);
+
+	p->net->ForwardPrefilled();
+
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+
+	Mat m2(1, blob->width() * blob->height() * blob->channels(), CV_32F);
+	for (int i = 0; i < m2.cols; i++)
+		m2.at<float>(0, i) = bdata[i];
+	return m2;
+}
+
+Mat CaffeCnn::extract(const Mat &img, const QStringList &layers)
+{
+	std::vector<float> output = predict(img, p);
+
+	Blob<float>* input_layer = p->net->input_blobs()[0];
+	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
+	/* Forward dimension change to all layers. */
+	p->net->Reshape();
+
+	std::vector<cv::Mat> input_channels;
+	wrapInputLayer(&input_channels, p);
+
+	preprocess(img, &input_channels, p);
+
+	p->net->ForwardPrefilled();
+
+	int cols = 0;
+	foreach (const QString &layerName, layers) {
+		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+		cols += blob->width() * blob->height() * blob->channels();
+	}
+	Mat m(1, cols, CV_32F);
+	int off = 0;
+	foreach (const QString &layerName, layers) {
+		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+		const float *bdata = blob->cpu_data() + blob->offset(0);
+		cols = blob->width() * blob->height() * blob->channels();
+		for (int i = 0; i < cols; i++)
+			m.at<float>(0, off + i) = bdata[i];
+		off += cols;
+	}
+
+	return m;
+}
+
 void CaffeCnn::printLayerInfo()
 {
 	for (uint i = 0; i < p->net->layer_names().size(); i++) {
 		QString layer = QString::fromStdString(p->net->layer_names()[i]);
-		if (layer.startsWith("relu") || layer.startsWith("prob") || layer.startsWith("drop"))
-			continue;
-		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
-		ffDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
+		if (p->net->has_blob(layer.toStdString())) {
+			const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
+			ffDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
+		} else
+			ffDebug() << layer;
 	}
 }
 
