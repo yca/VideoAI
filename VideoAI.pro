@@ -37,7 +37,8 @@ SOURCES += main.cpp\
     vision/pyramidsvl.cpp \
     imps/oxfordretrieval.cpp \
     imps/caltechbench.cpp \
-    caffe/caffecnn.cpp
+    caffe/caffecnn.cpp \
+    lmm/buffercloner.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -60,7 +61,8 @@ HEADERS  += mainwindow.h \
     vision/pyramidsvl.h \
     imps/oxfordretrieval.h \
     imps/caltechbench.h \
-    caffe/caffecnn.h
+    caffe/caffecnn.h \
+    lmm/buffercloner.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
