@@ -134,6 +134,11 @@ public:
 		int debug;
 		int spatialSize;
 		bool homkermap;
+		QString caffeBaseDir;
+		QString caffeDeployProto;
+		QString caffeModelFile;
+		QString caffeImageMeanProto;
+		int targetCaffeModel;
 	};
 	parameters pars;
 
@@ -167,7 +172,7 @@ protected:
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
 	std::vector<cv::KeyPoint> extractKeypoints(const cv::Mat &m);
 	cv::Mat computeFeatures(const cv::Mat &m, std::vector<cv::KeyPoint> &keypoints);
-	CaffeCnn * getCurrentThreadCaffe(int priv);
+	const QList<CaffeCnn *> getCurrentThreadCaffe(int priv);
 
 	virtual int pipelineOutput(BaseLmmPipeline *, const RawBuffer &buf);
 

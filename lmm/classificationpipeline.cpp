@@ -37,7 +37,7 @@ public:
 
 	Pyramids *py;
 	VlHomogeneousKernelMap *map;
-	CaffeCnn *c;
+	QList<CaffeCnn *> cnns;
 	QStringList inetCats;
 };
 
@@ -149,13 +149,13 @@ const RawBuffer ClassificationPipeline::readNextLMDBImageFeature()
 {
 	tdlock.lock();
 	CaffeCnn *c = NULL;
-	c = threadsData[0]->c;
-	if (!c) {
+	if (!threadsData[0]->cnns.size()) {
 		QString filename = pars.lmdbFeaturePath;
 		c = new CaffeCnn;
 		c->load(filename);
-		threadsData[0]->c = c;
+		threadsData[0]->cnns << c;
 	}
+	c = threadsData[0]->cnns.first();
 	tdlock.unlock();
 	if (!c)
 		return RawBuffer(this);
@@ -365,17 +365,17 @@ RawBuffer ClassificationPipeline::cnnClassify(const RawBuffer &buf, int priv)
 	CaffeCnn *c = NULL;
 	QStringList icats;
 	if (priv < threadsData.size()) {
-		c = threadsData[priv]->c;
 		icats = threadsData[priv]->inetCats;
-		if (!c) {
+		if (!threadsData[priv]->cnns.size()) {
 			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
 			c = new CaffeCnn;
 			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
 				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
 				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
 				   cbase + "data/ilsvrc12/synset_words.txt");
-			threadsData[priv]->c = c;
+			threadsData[priv]->cnns << c;
 		}
+		c = threadsData[priv]->cnns.first();
 	}
 	tdlock.unlock();
 	if (!c)
@@ -436,27 +436,30 @@ RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
 	if (buf.getMimeType() != "application/cv-mat")
 		return RawBuffer();
 
-	tdlock.lock();
-	CaffeCnn *c = NULL;
-	if (priv < threadsData.size()) {
-		c = threadsData[priv]->c;
-		if (!c) {
-			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
-			c = new CaffeCnn;
-			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
-				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
-				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
-				   cbase + "data/ilsvrc12/synset_words.txt");
-			threadsData[priv]->c = c;
-		}
-	}
-	tdlock.unlock();
-	if (!c)
-		return buf;
-
+	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
 	CVBuffer *cbuf = (CVBuffer *)&buf;
 	const Mat &img = cbuf->getReferenceMat();
 
+	if (pars.targetCaffeModel < 0) {
+		/* use all models */
+		Mat merged;
+		for (int i = 0; i < list.size(); i++) {
+			CaffeCnn *c = list[i];
+			Mat m = c->extract(img, pars.cnnFeatureLayer);
+			if (i == 0)
+				merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
+			for (int j = 0; j < m.cols; j++)
+				merged.at<float>(0, i * m.cols + j) = m.at<float>(0, j);
+		}
+		return createNewBuffer(merged, buf);
+	}
+
+	/* use single model */
+	CaffeCnn *c = list[pars.targetCaffeModel];
+	if (!c)
+		return buf;
+	if (pars.cnnFeatureLayer.contains("&"))
+		return createNewBuffer(c->extract(img, pars.cnnFeatureLayer.split("&")), buf);
 	return createNewBuffer(c->extract(img, pars.cnnFeatureLayer), buf);
 }
 
@@ -530,7 +533,6 @@ void ClassificationPipeline::init()
 		ThreadData *data = new ThreadData;
 		data->py = NULL;
 		data->map =  NULL;
-		data->c = NULL;
 		threadsData << data;
 	}
 
@@ -825,31 +827,51 @@ Mat ClassificationPipeline::computeFeatures(const Mat &m, std::vector<KeyPoint> 
 		SurfDescriptorExtractor ex;
 		ex.compute(m, keypoints, features);
 	} else if (pars.ft == FEAT_CNN) {
-		CaffeCnn *c = getCurrentThreadCaffe(0);
-		assert(c != NULL);
-		return c->extract(m, pars.cnnFeatureLayer);
+		const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
+		return list[0]->extract(m, pars.cnnFeatureLayer);
 	}
 	return features;
 }
 
-CaffeCnn *ClassificationPipeline::getCurrentThreadCaffe(int priv)
+const QList<CaffeCnn *> ClassificationPipeline::getCurrentThreadCaffe(int priv)
 {
 	tdlock.lock();
-	CaffeCnn *c = NULL;
 	if (priv < threadsData.size()) {
-		c = threadsData[priv]->c;
-		if (!c) {
-			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
-			c = new CaffeCnn;
-			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
-				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
-				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
-				   cbase + "data/ilsvrc12/synset_words.txt");
-			threadsData[priv]->c = c;
+		if (!threadsData[priv]->cnns.size()) {
+			QString cbase = pars.caffeBaseDir;
+			QString deployProto = pars.caffeDeployProto;
+			QString modelFile = pars.caffeModelFile;
+			QString imageMeanProto = pars.caffeImageMeanProto;
+
+			if (!deployProto.contains(",")) {
+				CaffeCnn *c = new CaffeCnn;
+				c->load(cbase + deployProto,
+					   cbase + modelFile,
+					   cbase + imageMeanProto,
+					   cbase + "data/ilsvrc12/synset_words.txt");
+				c->printLayerInfo();
+				threadsData[priv]->cnns << c;
+			} else {
+				QStringList l1 = deployProto.split(",");
+				QStringList l2 = modelFile.split(",");
+				QStringList l3 = imageMeanProto.split(",");
+				assert(l1.size() == l2.size());
+				assert(l1.size() == l3.size());
+				for (int i = 0; i < l1.size(); i++) {
+					CaffeCnn *c = new CaffeCnn;
+					assert(c->load(cbase + l1[i],
+						   cbase + l2[i],
+						   cbase + l3[i],
+						   cbase + "data/ilsvrc12/synset_words.txt") == 0);
+					c->printLayerInfo();
+					threadsData[priv]->cnns << c;
+				}
+			}
 		}
 	}
+	QList<CaffeCnn *> list = threadsData[priv]->cnns;
 	tdlock.unlock();
-	return c;
+	return list;
 }
 
 int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *, const RawBuffer &buf)
