@@ -581,7 +581,7 @@ void ClassificationPipeline::init()
 				createTrainTestSplit(trainSetFileName);
 			else {
 				QHash<QString, int> tthash;
-				QStringList cats;
+				QHash<QString, int> cats;
 				QStringList trainList = Common::importText(pars.trainListTxt);
 				for (int j = 0; j < trainList.size(); j++) {
 					QStringList flds = trainList[j].trimmed().split(" ");
@@ -589,9 +589,11 @@ void ClassificationPipeline::init()
 					if (name.isEmpty())
 						continue;
 					QStringList vals = name.split("/");
-					if (!cats.contains(vals.first()))
-						cats << vals.first();
 					tthash.insert(vals.last(), 1);
+					int cat = flds[1].trimmed().toInt();
+					assert(cat);
+					cats.insert(vals.first(), cat);
+
 				}
 				QStringList testList = Common::importText(pars.testListTxt);
 				for (int j = 0; j < testList.size(); j++) {
@@ -607,12 +609,14 @@ void ClassificationPipeline::init()
 					QFileInfo fi(images[i]);
 					QStringList flds = fi.baseName().split("_");
 					flds.removeLast();
-					int val = tthash[flds.join("_")];
+					QString key = flds.join("_");
+					int val = tthash[key];
 					if (val == 1)
 						info->useForTrain = true;
 					else if (val == 2)
 						info->useForTest = true;
-					info->label = cats.indexOf(fi.dir().dirName()) + 1;
+					info->label = cats[fi.dir().absolutePath().split("/").last()];//cats.indexOf(fi.dir().dirName()) + 1;
+					assert(info->label);
 					trainInfo << info;
 				}
 			}
