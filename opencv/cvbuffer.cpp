@@ -19,7 +19,15 @@ CVBuffer::CVBuffer(const std::vector<KeyPoint> &vec) :
 	CVBufferData *dd = new CVBufferData;
 	dd->vec = vec;
 	d = dd;
-	setRefData("applicaiton/cv-kpts", (void *)vec.data(), vec.size());
+	setRefData("application/cv-kpts", (void *)vec.data(), vec.size());
+}
+
+CVBuffer::CVBuffer(const std::vector<Mat> &vec)
+{
+	CVBufferData *dd = new CVBufferData;
+	dd->vec2 = vec;
+	d = dd;
+	setRefData("application/cv-matv", (void *)vec.data(), vec.size());
 }
 
 const Mat CVBuffer::getReferenceMat() const
@@ -38,6 +46,12 @@ std::vector<KeyPoint> &CVBuffer::getKeypoints() const
 {
 	CVBufferData *dd = (CVBufferData *)d.data();
 	return dd->vec;
+}
+
+std::vector<Mat> &CVBuffer::getVector() const
+{
+	CVBufferData *dd = (CVBufferData *)d.data();
+	return dd->vec2;
 }
 
 CVBufferData::~CVBufferData()

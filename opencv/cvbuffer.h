@@ -23,6 +23,7 @@ public:
 	~CVBufferData();
 	cv::Mat mat;
 	std::vector<cv::KeyPoint> vec;
+	std::vector<cv::Mat> vec2;
 	bool bufferOwner;
 };
 
@@ -31,9 +32,11 @@ class CVBuffer : public RawBuffer
 public:
 	explicit CVBuffer(const cv::Mat &m);
 	explicit CVBuffer(const std::vector<cv::KeyPoint> &vec);
+	explicit CVBuffer(const std::vector<cv::Mat> &vec);
 	const cv::Mat getReferenceMat() const;
 	void setReferenceMat(const cv::Mat &m);
 	std::vector<cv::KeyPoint> & getKeypoints() const;
+	std::vector<cv::Mat> & getVector() const;
 signals:
 
 public slots:
