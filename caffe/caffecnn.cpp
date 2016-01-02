@@ -33,7 +33,7 @@ public:
 
 static bool PairCompare(const std::pair<float, int>& lhs, const std::pair<float, int>& rhs)
 {
-  return lhs.first > rhs.first;
+	return lhs.first > rhs.first;
 }
 
 /* Return the indices of the top N values of vector v. */
@@ -186,6 +186,16 @@ int CaffeCnn::load(const QString &lmdbFolder)
 
 int CaffeCnn::setMean(const QString &meanFile)
 {
+	if (meanFile.endsWith("_vgg")) {
+		//Namely, the following BGR values should be subtracted: [103.939, 116.779, 123.68].
+		//Scalar channelMean = Scalar(103.939, 116.779, 123.68);
+		vector<Mat> chnls;
+		chnls.push_back(Mat::ones(p->inputGeometry, CV_32FC1) * 103.939);
+		chnls.push_back(Mat::ones(p->inputGeometry, CV_32FC1) * 116.779);
+		chnls.push_back(Mat::ones(p->inputGeometry, CV_32FC1) * 123.68);
+		cv::merge(chnls, p->mean);
+		return 0;
+	}
 	BlobProto blobProto;
 	ReadProtoFromBinaryFileOrDie(qPrintable(meanFile), &blobProto);
 
@@ -292,6 +302,31 @@ Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 	return m;
 }
 
+static Mat extractBlobVector(const shared_ptr<Blob<float> > blob)
+{
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+	assert(blob->width() * blob->height() * blob->channels() == blob->count());
+	Mat m2(1, blob->width() * blob->height() * blob->channels(), CV_32F);
+	for (int i = 0; i < m2.cols; i++)
+		m2.at<float>(0, i) = bdata[i];
+	return m2 / OpenCV::getL2Norm(m2);
+}
+
+static Mat extractBlobMatrix(const shared_ptr<Blob<float> > blob)
+{
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+	Mat m(blob->width() * blob->height(), blob->channels(), CV_32F);
+	for (int i = 0; i < blob->count(); i++) {
+		int row = i % m.rows;
+		int col = i / m.rows;
+		m.at<float>(row, col) = bdata[i];
+	}
+	for (int i = 0; i < m.rows; i++)
+		m.row(i) /= OpenCV::getL2Norm(m.row(i));
+	assert(m.rows * m.cols == blob->count());
+	return m;
+}
+
 Mat CaffeCnn::extractLinear(const Mat &img, const QString &layerName)
 {
 	QMutexLocker locker(&lock);
@@ -299,13 +334,7 @@ Mat CaffeCnn::extractLinear(const Mat &img, const QString &layerName)
 	forwardImage(img);
 
 	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
-	const float *bdata = blob->cpu_data() + blob->offset(0);
-
-	assert(blob->width() * blob->height() * blob->channels() == blob->count());
-	Mat m2(1, blob->width() * blob->height() * blob->channels(), CV_32F);
-	for (int i = 0; i < m2.cols; i++)
-		m2.at<float>(0, i) = bdata[i];
-	return m2 / OpenCV::getL2Norm(m2);
+	return extractBlobVector(blob);
 }
 
 Mat CaffeCnn::extractLinear(const Mat &img, const QStringList &layers)
@@ -339,20 +368,9 @@ vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers)
 	forwardImage(img);
 	vector<Mat> features;
 	foreach (const QString &layer, layers) {
-
 		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
-		const float *bdata = blob->cpu_data() + blob->offset(0);
-
-		Mat m(blob->width() * blob->height(), blob->channels(), CV_32F);
-		for (int i = 0; i < blob->count(); i++) {
-			int row = i % m.rows;
-			int col = i / m.rows;
-			m.at<float>(row, col) = bdata[i];
-		}
-		for (int i = 0; i < m.rows; i++)
-			m.row(i) /= OpenCV::getL2Norm(m.row(i));
-		assert(m.rows * m.cols == blob->count());
-		features.push_back(m);
+		//features.push_back(extractBlobMatrix(blob));
+		features.push_back(extractBlobVector(blob));
 	}
 
 	return features;
@@ -376,6 +394,17 @@ void CaffeCnn::printLayerInfo(const QStringList &layers)
 		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
 		ffDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
 	}
+}
+
+QStringList CaffeCnn::getBlobbedLayerNames()
+{
+	QStringList list;
+	for (uint i = 0; i < p->net->layer_names().size(); i++) {
+		QString layer = QString::fromStdString(p->net->layer_names()[i]);
+		if (p->net->has_blob(layer.toStdString()))
+			list << layer;
+	}
+	return list;
 }
 
 void CaffeCnn::forwardImage(const Mat &img)

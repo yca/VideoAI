@@ -31,6 +31,7 @@ public:
 
 	void printLayerInfo();
 	void printLayerInfo(const QStringList &layers);
+	QStringList getBlobbedLayerNames();
 signals:
 
 public slots:
