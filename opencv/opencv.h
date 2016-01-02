@@ -18,6 +18,13 @@ public:
 	~OpenCV();
 
 	Mat getRefMat() { return refMat; }
+
+	enum MergeMethod {
+		MM_CONCAT,
+		MM_SUM,
+		MM_MAX,
+	};
+	static Mat merge(const vector<Mat> &vec, MergeMethod mm = MM_CONCAT);
 signals:
 
 public slots:

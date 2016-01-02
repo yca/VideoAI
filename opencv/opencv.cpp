@@ -25,6 +25,32 @@ OpenCV::~OpenCV()
 	qDebug("deleting my object");
 }
 
+Mat OpenCV::merge(const vector<Mat> &vec, MergeMethod mm)
+{
+	if (mm == MM_CONCAT) {
+		int cols = 0;
+		for (uint i = 0; i < vec.size(); ++i)
+			cols += vec[i].cols;
+		Mat m = Mat::zeros(1, cols, CV_32F);
+		int off = 0;
+		for (uint i = 0; i < vec.size(); ++i)
+			for (int j = 0; j < vec[i].cols; j++)
+				m.at<float>(0, off++) = vec[i].at<float>(0, j);
+		return m;
+	} else if (mm == MM_SUM) {
+		Mat m = Mat::zeros(1, vec[0].cols, CV_32F);
+		for (uint i = 0; i < vec.size(); i++)
+			for (int j = 0; j < m.cols; j++)
+				m.at<float>(0, j) += vec[i].at<float>(0, j) / vec.size();
+		return m;
+	}
+	Mat m = Mat::zeros(1, vec[0].cols, CV_32F);
+	for (uint i = 0; i < vec.size(); i++)
+		for (int j = 0; j < m.cols; j++)
+			m.at<float>(0, j) = qMax<float>(vec[i].at<float>(0, j), m.at<float>(0, j));
+	return m;
+}
+
 float OpenCV::getL1Norm(const Mat &m1)
 {
 	return norm(m1, NORM_L1);
