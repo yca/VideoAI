@@ -39,7 +39,9 @@ public:
 	virtual int processBuffer(const RawBuffer &buf)
 	{
 		RawBuffer buf2 = (enc->*mfunc)(buf, priv);
-		if (getOutputQueue(0)->getBufferCount() > 1000)
+		if (buf.getMimeType() == "application/empty")
+			return 0;
+		if (getOutputQueue(0)->getBufferCount() > 500)
 			usleep(1000 * 100);
 		return newOutputBuffer(0, buf2);
 	}
@@ -66,7 +68,7 @@ public:
 	int processBlocking(int ch)
 	{
 		RawBuffer buf = (enc->*mfunc)();
-		if (getOutputQueue(0)->getBufferCount() > 1000)
+		if (getOutputQueue(0)->getBufferCount() > 500)
 			usleep(1000 * 100);
 		return newOutputBuffer(ch, buf);
 	}
@@ -102,6 +104,7 @@ public:
 		CLASSIFY_CNN,
 		CLASSIFY_CNN_FC7,
 		CLASSIFY_CNN_SVM,
+		CLASSIFY_CNN_BOW,
 	};
 
 	struct parameters {
@@ -139,6 +142,7 @@ public:
 		QString caffeModelFile;
 		QString caffeImageMeanProto;
 		int targetCaffeModel;
+		int featureMergingMethod;
 	};
 	parameters pars;
 
@@ -156,6 +160,9 @@ public:
 	virtual RawBuffer exportForSvm(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnClassify(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnExtract(const RawBuffer &buf, int priv);
+	virtual RawBuffer mergeFeatures(const RawBuffer &buf, int priv);
+	virtual RawBuffer debugBuffer(const RawBuffer &buf, int priv);
+	virtual RawBuffer createMulti(const RawBuffer &buf, int priv);
 signals:
 
 protected slots:
@@ -167,6 +174,7 @@ protected:
 	void createCNNPipeline();
 	void createCNNFC7Pipeline();
 	void createCNNFSVMPipeline();
+	void createCNNBOWPipeline();
 	void createTrainTestSplit(const QString &trainSetFileName);
 	QString getExportFilename(const QString &imname, const QString &suffix);
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
