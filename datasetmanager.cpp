@@ -164,6 +164,34 @@ QString DatasetManager::getCategory(const QString &image)
 	return fi.dir().dirName();
 }
 
+int DatasetManager::getDatasetCategory(const QString &imageCat)
+{
+	return categories[currentDataset][imageCat.toLower()];
+}
+
+void DatasetManager::exportImages(const QString &dataset, const QString &filename)
+{
+	const QStringList &list = dataSetImages(dataset);
+	Common::exportText(list.join("\n"), filename);
+}
+
+void DatasetManager::addUCF101(const QString &path, const QString &trainTestListPath)
+{
+	addDataset("ucf101", path);
+	QStringList files = listDir(trainTestListPath, "txt");
+	foreach (const QString &file, files) {
+		if (file.endsWith("classInd.txt")) {
+			QStringList lines = Common::importText(file);
+			foreach (QString line, lines) {
+				if (line.trimmed().isEmpty())
+					continue;
+				categories["ucf101"].insert(line.split(" ")[1].trimmed().toLower(),
+						line.split(" ")[0].toInt());
+			}
+		}
+	}
+}
+
 QList<QPair<int, QString> > DatasetManager::voc2007GetImagesForCateogory(const QString &path, QString key, QString cat)
 {
 	QDir d(path + "/JPEGImages");

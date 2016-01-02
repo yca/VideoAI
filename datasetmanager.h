@@ -25,6 +25,10 @@ public slots:
 	QStringList datasetCategories(const QString &dataset);
 	QString getImage(int pos);
 	QString getCategory(const QString &image);
+	int getDatasetCategory(const QString &imageCat);
+	void exportImages(const QString &dataset, const QString &filename);
+
+	void addUCF101(const QString &path, const QString &trainTestListPath);
 
 	static QList<QPair<int, QString> > voc2007GetImagesForCateogory(const QString &path, QString key, QString cat);
 	static void parseOxfordFeatures(const QString &path, const QString &ftPath, vector<vector<KeyPoint> > &kpts, vector<Mat> &features, vector<Mat> &ids);
@@ -35,6 +39,7 @@ public slots:
 protected:
 	QString currentDataset;
 	QHash<QString, QStringList> datasets;
+	QHash<QString, QHash<QString, int> > categories;
 };
 
 #endif // DATASETMANAGER_H
