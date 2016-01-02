@@ -9,12 +9,16 @@
 #include <opencv2/opencv.hpp>
 #include <caffe/util/db_lmdb.hpp>
 
+#include <QMutexLocker>
+
 using namespace cv;
 using namespace std;
 using namespace caffe;
 using namespace db;
 
 typedef std::pair<string, float> Prediction;
+
+QMutex CaffeCnn::lock;
 
 class CaffeCnnPriv {
 public:
@@ -128,17 +132,21 @@ static std::vector<float> predict(const cv::Mat& img, CaffeCnnPriv *p)
 
 CaffeCnn::CaffeCnn(QObject *parent) : QObject(parent)
 {
+	lock.lock();
 	static int once = 0;
 	if (!once) {
 		::google::InitGoogleLogging("VideoAi");
-		Caffe::set_mode(Caffe::GPU);
 		once = 1;
 	}
+	Caffe::set_mode(Caffe::GPU);
 	p = new CaffeCnnPriv;
+	lock.unlock();
 }
 
 int CaffeCnn::load(const QString &modelFile, const QString &trainedFile, const QString &meanFile, const QString &labelFile)
 {
+	QMutexLocker locker(&lock);
+
 	p->net.reset(new Net<float>(modelFile.toStdString(), TEST));
 	p->net->CopyTrainedLayersFrom(trainedFile.toStdString());
 	if (p->net->num_inputs() != 1)
@@ -168,6 +176,8 @@ int CaffeCnn::load(const QString &modelFile, const QString &trainedFile, const Q
 
 int CaffeCnn::load(const QString &lmdbFolder)
 {
+	QMutexLocker locker(&lock);
+
 	p->imdb = new LMDB;
 	p->imdb->Open(lmdbFolder.toStdString(), db::READ);
 	p->dbCursor = p->imdb->NewCursor();
@@ -251,17 +261,9 @@ Mat CaffeCnn::readNextFeature(QString &key)
 
 Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 {
-	Blob<float>* input_layer = p->net->input_blobs()[0];
-	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
-	/* Forward dimension change to all layers. */
-	p->net->Reshape();
+	QMutexLocker locker(&lock);
 
-	std::vector<cv::Mat> input_channels;
-	wrapInputLayer(&input_channels, p);
-
-	preprocess(img, &input_channels, p);
-
-	p->net->ForwardPrefilled();
+	forwardImage(img);
 
 	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
 	const float *bdata = blob->cpu_data() + blob->offset(0);
@@ -292,42 +294,25 @@ Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 
 Mat CaffeCnn::extractLinear(const Mat &img, const QString &layerName)
 {
-	Blob<float>* input_layer = p->net->input_blobs()[0];
-	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
-	/* Forward dimension change to all layers. */
-	p->net->Reshape();
+	QMutexLocker locker(&lock);
 
-	std::vector<cv::Mat> input_channels;
-	wrapInputLayer(&input_channels, p);
-
-	preprocess(img, &input_channels, p);
-
-	p->net->ForwardPrefilled();
+	forwardImage(img);
 
 	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
 	const float *bdata = blob->cpu_data() + blob->offset(0);
 
+	assert(blob->width() * blob->height() * blob->channels() == blob->count());
 	Mat m2(1, blob->width() * blob->height() * blob->channels(), CV_32F);
 	for (int i = 0; i < m2.cols; i++)
 		m2.at<float>(0, i) = bdata[i];
-	return m2;
+	return m2 / OpenCV::getL2Norm(m2);
 }
 
-Mat CaffeCnn::extract(const Mat &img, const QStringList &layers)
+Mat CaffeCnn::extractLinear(const Mat &img, const QStringList &layers)
 {
-	std::vector<float> output = predict(img, p);
+	QMutexLocker locker(&lock);
 
-	Blob<float>* input_layer = p->net->input_blobs()[0];
-	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
-	/* Forward dimension change to all layers. */
-	p->net->Reshape();
-
-	std::vector<cv::Mat> input_channels;
-	wrapInputLayer(&input_channels, p);
-
-	preprocess(img, &input_channels, p);
-
-	p->net->ForwardPrefilled();
+	forwardImage(img);
 
 	int cols = 0;
 	foreach (const QString &layerName, layers) {
@@ -345,7 +330,32 @@ Mat CaffeCnn::extract(const Mat &img, const QStringList &layers)
 		off += cols;
 	}
 
-	return m;
+	return m / OpenCV::getL2Norm(m);
+}
+
+vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers)
+{
+	QMutexLocker locker(&lock);
+	forwardImage(img);
+	vector<Mat> features;
+	foreach (const QString &layer, layers) {
+
+		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
+		const float *bdata = blob->cpu_data() + blob->offset(0);
+
+		Mat m(blob->width() * blob->height(), blob->channels(), CV_32F);
+		for (int i = 0; i < blob->count(); i++) {
+			int row = i % m.rows;
+			int col = i / m.rows;
+			m.at<float>(row, col) = bdata[i];
+		}
+		for (int i = 0; i < m.rows; i++)
+			m.row(i) /= OpenCV::getL2Norm(m.row(i));
+		assert(m.rows * m.cols == blob->count());
+		features.push_back(m);
+	}
+
+	return features;
 }
 
 void CaffeCnn::printLayerInfo()
@@ -366,5 +376,20 @@ void CaffeCnn::printLayerInfo(const QStringList &layers)
 		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
 		ffDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
 	}
+}
+
+void CaffeCnn::forwardImage(const Mat &img)
+{
+	Blob<float>* input_layer = p->net->input_blobs()[0];
+	input_layer->Reshape(1, p->channelCount, p->inputGeometry.height, p->inputGeometry.width);
+	/* Forward dimension change to all layers. */
+	p->net->Reshape();
+
+	std::vector<cv::Mat> input_channels;
+	wrapInputLayer(&input_channels, p);
+
+	preprocess(img, &input_channels, p);
+
+	p->net->ForwardPrefilled();
 }
 

@@ -1,6 +1,7 @@
 #ifndef CAFFECNN_H
 #define CAFFECNN_H
 
+#include <QMutex>
 #include <QObject>
 #include <QStringList>
 
@@ -25,7 +26,8 @@ public:
 	Mat readNextFeature(QString &key);
 	Mat extract(const Mat &img, const QString &layerName);
 	Mat extractLinear(const Mat &img, const QString &layerName);
-	Mat extract(const Mat &img, const QStringList &layers);
+	Mat extractLinear(const Mat &img, const QStringList &layers);
+	vector<Mat> extractMulti(const Mat &img, const QStringList &layers);
 
 	void printLayerInfo();
 	void printLayerInfo(const QStringList &layers);
@@ -34,7 +36,9 @@ signals:
 public slots:
 
 protected:
+	void forwardImage(const Mat &img);
 	CaffeCnnPriv *p;
+	static QMutex lock;
 };
 
 #endif // CAFFECNN_H
