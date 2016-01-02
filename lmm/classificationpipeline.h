@@ -105,6 +105,7 @@ public:
 		CLASSIFY_CNN_FC7,
 		CLASSIFY_CNN_SVM,
 		CLASSIFY_CNN_BOW,
+		CLASSIFY_CNN_MULTIFTS,
 	};
 
 	struct parameters {
@@ -158,8 +159,10 @@ public:
 	virtual RawBuffer createImageDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer mapDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer exportForSvm(const RawBuffer &buf, int priv);
+	virtual RawBuffer exportForSvmMulti(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnClassify(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnExtract(const RawBuffer &buf, int priv);
+	virtual RawBuffer cnnExtractMultiFts(const RawBuffer &buf, int priv);
 	virtual RawBuffer mergeFeatures(const RawBuffer &buf, int priv);
 	virtual RawBuffer debugBuffer(const RawBuffer &buf, int priv);
 	virtual RawBuffer createMulti(const RawBuffer &buf, int priv);
@@ -175,6 +178,7 @@ protected:
 	void createCNNFC7Pipeline();
 	void createCNNFSVMPipeline();
 	void createCNNBOWPipeline();
+	void createCNNMultiFts();
 	void createTrainTestSplit(const QString &trainSetFileName);
 	QString getExportFilename(const QString &imname, const QString &suffix);
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
@@ -196,6 +200,8 @@ protected:
 	int imageCount;
 	int finishedCount;
 	int expectedFrameCount;
+	QList<QFile *> trainFilesMulti;
+	QList<QFile *> testFilesMulti;
 
 	QMutex tdlock;
 	QList<ThreadData *> threadsData;

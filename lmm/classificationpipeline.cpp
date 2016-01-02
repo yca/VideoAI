@@ -78,6 +78,16 @@ static RawBuffer createNewBuffer(const vector<KeyPoint> &kpts, const Mat &m, con
 	return c2;
 }
 
+static RawBuffer createNewBuffer(const vector<Mat> &fts, const RawBuffer &buf)
+{
+	CVBuffer c2(fts);
+	c2.pars()->metaData = buf.constPars()->metaData;
+	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
+	c2.pars()->videoWidth = buf.constPars()->videoWidth;
+	c2.pars()->videoHeight = buf.constPars()->videoHeight;
+	return c2;
+}
+
 static RawBuffer createNewBuffer(const Mat &m, const RawBuffer &buf)
 {
 	CVBuffer c2(m);
@@ -386,6 +396,65 @@ RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
 	return buf;
 }
 
+RawBuffer ClassificationPipeline::exportForSvmMulti(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-matv")
+		return RawBuffer();
+
+	int index = buf.constPars()->streamBufferNo;
+	TrainInfo *info = trainInfo[index];
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	int label = info->label;
+	const vector<Mat> &fts = cbuf->getVector();
+	for (uint k = 0; k < fts.size(); k++) {
+		const Mat &desc = fts[k];
+
+		QString line = QString("%1 ").arg(label);
+		float *data = (float *)desc.row(0).data;
+		for (int j = 0; j < desc.cols; j++) {
+			if (data[j] != 0)
+				line.append(QString("%1:%2 ").arg(j + 1).arg(data[j]));
+		}
+		int multiIndex = k;
+
+		if (multiIndex == trainFilesMulti.size()) {
+			QFile *file = new QFile(QString("%1/svm_train_ftype%2_K%3_step%4_L%5_gamma%6.txt")
+									.arg(pars.dataPath)
+									.arg(pars.ft)
+									.arg(pars.K + multiIndex)
+									.arg(pars.xStep)
+									.arg(pars.L)
+									.arg(pars.gamma)
+									);
+			file->open(QIODevice::WriteOnly);
+			trainFilesMulti << file;
+			file = new QFile(QString("%1/svm_test_ftype%2_K%3_step%4_L%5_gamma%6.txt")
+							 .arg(pars.dataPath)
+							 .arg(pars.ft)
+							 .arg(pars.K + multiIndex)
+							 .arg(pars.xStep)
+							 .arg(pars.L)
+							 .arg(pars.gamma)
+							 );
+			file->open(QIODevice::WriteOnly);
+			testFilesMulti << file;
+		}
+
+		QFile *trainFile = trainFilesMulti[multiIndex];
+		QFile *testFile = testFilesMulti[multiIndex];
+		if (info->useForTrain) {
+			trainFile->write(line.toUtf8());
+			trainFile->write("\n");
+		} else if (info->useForTest) {
+			testFile->write(line.toUtf8());
+			testFile->write("\n");
+		}
+	}
+
+	return buf;
+}
+
 RawBuffer ClassificationPipeline::cnnClassify(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
@@ -517,6 +586,28 @@ RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
 	return createNewBuffer(c->extractLinear(img, featureLayer), buf);
 }
 
+RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	const Mat &img = cbuf->getReferenceMat();
+
+	QString featureLayer = pars.cnnFeatureLayer;
+
+	/* use single model */
+	CaffeCnn *c = list[pars.targetCaffeModel];
+	if (!c)
+		return buf;
+	if (featureLayer == "__all__")
+		featureLayer = c->getBlobbedLayerNames().join("&");
+	const vector<Mat> fts = c->extractMulti(img, featureLayer.split("&"));
+	return createNewBuffer(fts, buf);
+}
+
 RawBuffer ClassificationPipeline::mergeFeatures(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
@@ -630,6 +721,10 @@ void ClassificationPipeline::pipelineFinished()
 		trainFile->close();
 	if (testFile)
 		testFile->close();
+	foreach (QFile *file, trainFilesMulti)
+		file->close();
+	foreach (QFile *file, testFilesMulti)
+		file->close();
 	stop();
 	ffDebug() << "quitting";
 	QApplication::exit();
@@ -689,6 +784,8 @@ void ClassificationPipeline::init()
 		createCNNFSVMPipeline();
 	else if (pars.cl == CLASSIFY_CNN_BOW)
 		createCNNBOWPipeline();
+	else if (pars.cl == CLASSIFY_CNN_MULTIFTS)
+		createCNNMultiFts();
 
 	for (int i = 0; i < pars.threads; i++) {
 		ThreadData *data = new ThreadData;
@@ -938,6 +1035,15 @@ void ClassificationPipeline::createCNNBOWPipeline()
 	p1->append(createEl(exportForSvm, 0), 0);
 	p1->end();
 #endif
+}
+
+void ClassificationPipeline::createCNNMultiFts()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	p1->append(createEl(cnnExtractMultiFts, 0));
+	p1->append(createEl(exportForSvmMulti, 0));
+	p1->end();
 }
 
 void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileName)
