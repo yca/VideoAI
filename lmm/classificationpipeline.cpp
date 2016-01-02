@@ -126,6 +126,22 @@ static Mat mergeBuffers(const Mat &m1, const Mat &m2)
 	return m;
 }
 
+static vector<Mat> subSampleImage(const Mat &img, int L)
+{
+	vector<Mat> images;
+	for (int i = 0; i <= L; i++) {
+		int cnt = pow(2, i);
+		int w = img.cols / cnt;
+		int h = img.rows / cnt;
+		for (int j = 0; j < cnt * cnt; j++) {
+			int x = (j % cnt) * w;
+			int y = (j / cnt) * h;
+			images.push_back(img(Rect(x, y, w, h)));
+		}
+	}
+	return images;
+}
+
 ClassificationPipeline::ClassificationPipeline(QObject *parent) :
 	PipelineManager(parent)
 {
@@ -399,6 +415,10 @@ RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
 RawBuffer ClassificationPipeline::exportForSvmMulti(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
+
+	if (buf.getMimeType() == "application/cv-mat")
+		return exportForSvm(buf, priv);
+
 	if (buf.getMimeType() != "application/cv-matv")
 		return RawBuffer();
 
@@ -453,81 +473,6 @@ RawBuffer ClassificationPipeline::exportForSvmMulti(const RawBuffer &buf, int pr
 	}
 
 	return buf;
-}
-
-RawBuffer ClassificationPipeline::cnnClassify(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	tdlock.lock();
-	CaffeCnn *c = NULL;
-	QStringList icats;
-	if (priv < threadsData.size()) {
-		icats = threadsData[priv]->inetCats;
-		if (!threadsData[priv]->cnns.size()) {
-			QString cbase = "/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/";
-			c = new CaffeCnn;
-			c->load(cbase + "models/bvlc_reference_caffenet/deploy.prototxt",
-				   cbase + "models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel",
-				   cbase + "data/ilsvrc12/imagenet_mean.binaryproto",
-				   cbase + "data/ilsvrc12/synset_words.txt");
-			threadsData[priv]->cnns << c;
-		}
-		c = threadsData[priv]->cnns.first();
-	}
-	tdlock.unlock();
-	if (!c)
-		return buf;
-
-	int N = 100;
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	QString imname = QString::fromUtf8(buf.constPars()->metaData);
-	QString fname = imname.replace(".jpg", ".cnn");
-	QFileInfo fi(imname);
-	fname = QString("%1/%2_L%3.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.L).arg("cnn");
-
-	QStringList cats;
-	int hcnt = histCount(pars.L);
-	/* use existing ones if exists */
-	if (pars.useExisting && QFile::exists(fname))
-		cats = Common::importText(fname);
-	else {
-		const Mat &img = cbuf->getReferenceMat();
-
-		/*
-		 * in case of L=0 following loop reduces to:
-		 *		cats = c->classify(img, N);
-		 */
-		for (int i = 0; i <= pars.L; i++) {
-			int cnt = pow(2, i);
-			int w = img.cols / cnt;
-			int h = img.rows / cnt;
-			for (int j = 0; j < cnt * cnt; j++) {
-				int x = (j % cnt) * w;
-				int y = (j / cnt) * h;
-				const Mat &sub = img(Rect(x, y, w, h));
-				cats << c->classify(sub, N);
-			}
-		}
-
-		if (pars.exportData)
-			Common::exportText(cats.join("\n"), fname);
-	}
-
-	Mat desc = Mat::zeros(1, icats.size() * hcnt, CV_32F);
-	for (int i = 0; i < cats.size(); i++) {
-		QStringList flds = cats[i].split(" ");
-		assert(flds.size() > 2);
-		float val = flds.last().toFloat();
-		int col = icats.indexOf(flds.first().trimmed());
-		assert(col >= 0);
-		int hist = i / N;
-		desc.at<float>(0, hist * icats.size() + col) +=  val;
-	}
-	desc /= OpenCV::getL1Norm(desc);
-	return createNewBuffer(desc, buf);
 }
 
 RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
@@ -586,6 +531,17 @@ RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
 	return createNewBuffer(c->extractLinear(img, featureLayer), buf);
 }
 
+const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, CaffeCnn *c)
+{
+	QStringList layers;
+	if (layerDesc == "__all__")
+		layers = c->getBlobbedLayerNames();
+	else
+		layers = layerDesc.split("&");
+	const vector<Mat> fts = c->extractMulti(img, layers);
+	return fts;
+}
+
 RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
@@ -596,15 +552,48 @@ RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int p
 	CVBuffer *cbuf = (CVBuffer *)&buf;
 	const Mat &img = cbuf->getReferenceMat();
 
-	QString featureLayer = pars.cnnFeatureLayer;
+	if (pars.targetCaffeModel < 0) {
+		QStringList cnnLayers = pars.cnnFeatureLayer.split(",");
+		assert(cnnLayers.size() == list.size());
+		vector<vector<Mat> > all;
+		for (int i = 0; i < list.size(); ++i) {
+			const vector<Mat> fts = extractCnnFeatures(img, cnnLayers[i], list[i]);
+			all.push_back(fts);
+		}
+		if (pars.featureMergingMethod == 0) { //concat all
+			vector<Mat> channels;
+			for (uint i = 0; i < all.size(); ++i)
+				channels.push_back(OpenCV::merge(all[i]));
+			return createNewBuffer(OpenCV::merge(channels), buf);
+		} else {
+			vector<vector<Mat> > all2;
+			for (uint i = 0; i < all[0].size(); i++)
+				all2.push_back(vector<Mat>());
+			for (uint i = 0; i < all.size(); ++i) {
+				const vector<Mat> &model = all[i];
+				for (uint j = 0; j < model.size(); j++)
+					all2[j].push_back(model[j]);
+			}
+			vector<Mat> channels;
+			OpenCV::MergeMethod method = OpenCV::MM_SUM;
+			if (pars.featureMergingMethod == 2)
+				method = OpenCV::MM_MAX;
+			for (uint i = 0; i < all2.size(); ++i)
+				channels.push_back(OpenCV::merge(all2[i], method));
+			return createNewBuffer(OpenCV::merge(channels), buf);
+		}
+		assert(0);
+	}
 
 	/* use single model */
 	CaffeCnn *c = list[pars.targetCaffeModel];
-	if (!c)
-		return buf;
-	if (featureLayer == "__all__")
-		featureLayer = c->getBlobbedLayerNames().join("&");
-	const vector<Mat> fts = c->extractMulti(img, featureLayer.split("&"));
+	vector<Mat> fts = extractCnnFeatures(img, pars.cnnFeatureLayer, c);
+	if (pars.featureMergingMethod == 0) //concat
+		return createNewBuffer(OpenCV::merge(fts), buf);
+	else if (pars.featureMergingMethod == 1) //sum pooling
+		return createNewBuffer(OpenCV::merge(fts, OpenCV::MM_SUM), buf);
+	else if (pars.featureMergingMethod == 2) //max pooling
+		return createNewBuffer(OpenCV::merge(fts, OpenCV::MM_MAX), buf);
 	return createNewBuffer(fts, buf);
 }
 
@@ -776,10 +765,6 @@ void ClassificationPipeline::init()
 		createDictPipeline();
 	else if (pars.cl == CLASSIFY_BOW)
 		createBOWPipeline();
-	else if (pars.cl == CLASSIFY_CNN)
-		createCNNPipeline();
-	else if (pars.cl == CLASSIFY_CNN_FC7)
-		createCNNFC7Pipeline();
 	else if (pars.cl == CLASSIFY_CNN_SVM)
 		createCNNFSVMPipeline();
 	else if (pars.cl == CLASSIFY_CNN_BOW)
@@ -802,20 +787,6 @@ void ClassificationPipeline::init()
 			data->py = new Pyramids;
 			data->py->setDict(dict);
 			data->map =  vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, pars.gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
-
-			if (pars.cl == CLASSIFY_CNN) {
-				/* extract imagenet classes */
-				QStringList lines = Common::importText("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/data/ilsvrc12/synset_words.txt");
-				QStringList icats;
-				foreach (const QString &line, lines) {
-					QStringList flds = line.split(" ");
-					if (flds.size() < 2)
-						continue;
-					icats << flds.first().trimmed();
-				}
-				data->inetCats = icats;
-			} else if (pars.cl == CLASSIFY_CNN_FC7) {
-			}
 		}
 
 		QString trainSetFileName = QString("%1/train_set.txt")
@@ -944,25 +915,6 @@ void ClassificationPipeline::createBOWPipeline()
 		join1 << p1->getPipe(p1->getPipeCount() - 1);
 	}
 	p1->appendJoin(createEl(exportForSvm, 0), join1);
-	p1->end();
-}
-
-void ClassificationPipeline::createCNNPipeline()
-{
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	p1->append(createEl(cnnClassify, 0));
-	if (pars.homkermap)
-		p1->append(createEl(mapDescriptor, 0));
-	p1->append(createEl(exportForSvm, 0));
-	p1->end();
-}
-
-void ClassificationPipeline::createCNNFC7Pipeline()
-{
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextLMDBImageFeature));
-	p1->append(createEl(exportForSvm, 0));
 	p1->end();
 }
 

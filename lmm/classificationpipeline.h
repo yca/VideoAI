@@ -101,9 +101,7 @@ public:
 	};
 	enum cltype {
 		CLASSIFY_BOW,
-		CLASSIFY_CNN,
-		CLASSIFY_CNN_FC7,
-		CLASSIFY_CNN_SVM,
+		CLASSIFY_CNN_SVM = 3,
 		CLASSIFY_CNN_BOW,
 		CLASSIFY_CNN_MULTIFTS,
 	};
@@ -160,7 +158,6 @@ public:
 	virtual RawBuffer mapDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer exportForSvm(const RawBuffer &buf, int priv);
 	virtual RawBuffer exportForSvmMulti(const RawBuffer &buf, int priv);
-	virtual RawBuffer cnnClassify(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnExtract(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnExtractMultiFts(const RawBuffer &buf, int priv);
 	virtual RawBuffer mergeFeatures(const RawBuffer &buf, int priv);
@@ -174,7 +171,6 @@ protected:
 	void init();
 	void createDictPipeline();
 	void createBOWPipeline();
-	void createCNNPipeline();
 	void createCNNFC7Pipeline();
 	void createCNNFSVMPipeline();
 	void createCNNBOWPipeline();
