@@ -302,6 +302,34 @@ Mat CaffeCnn::extract(const Mat &img, const QString &layerName)
 	return m;
 }
 
+static Mat extractBlobSumPooled(const shared_ptr<Blob<float> > blob)
+{
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+	assert(blob->width() * blob->height() * blob->channels() == blob->count());
+	Mat m = Mat::zeros(1, blob->channels(), CV_32F);
+	int cnt = blob->width() * blob->height();
+	for (int i = 0; i < blob->channels(); i++)
+		for (int j = 0; j < blob->height(); j++)
+			for (int k = 0; k < blob->width(); k++)
+				m.at<float>(0, i) += bdata[k + j * blob->width() + i * blob->height() * blob->width()] / cnt;
+	//((n * K + k) * H + h) * W + w.
+	//(k * H + h) * W + w
+	//(k * H * W) + (h * W) + w
+	return m / OpenCV::getL2Norm(m);
+}
+
+static Mat extractBlobMaxPooled(const shared_ptr<Blob<float> > blob)
+{
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+	assert(blob->width() * blob->height() * blob->channels() == blob->count());
+	Mat m = Mat::zeros(1, blob->channels(), CV_32F);
+	for (int i = 0; i < blob->channels(); i++)
+		for (int j = 0; j < blob->height(); j++)
+			for (int k = 0; k < blob->width(); k++)
+				m.at<float>(0, i) = qMax(m.at<float>(0, i), bdata[k + j * blob->width() + i * blob->height() * blob->width()]);
+	return m / OpenCV::getL2Norm(m);
+}
+
 static Mat extractBlobVector(const shared_ptr<Blob<float> > blob)
 {
 	const float *bdata = blob->cpu_data() + blob->offset(0);
@@ -362,15 +390,23 @@ Mat CaffeCnn::extractLinear(const Mat &img, const QStringList &layers)
 	return m / OpenCV::getL2Norm(m);
 }
 
-vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers)
+vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags)
 {
 	QMutexLocker locker(&lock);
 	forwardImage(img);
 	vector<Mat> features;
-	foreach (const QString &layer, layers) {
+	for (int i = 0; i < layers.size(); i++) {
+		const QString &layer = layers[i];
+		const QString &info = featureFlags[i];
 		const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
-		//features.push_back(extractBlobMatrix(blob));
-		features.push_back(extractBlobVector(blob));
+		if (info == "concat")
+			features.push_back(extractBlobVector(blob));
+		else if (info == "sum")
+			features.push_back(extractBlobSumPooled(blob));
+		else if (info == "max")
+			features.push_back(extractBlobMaxPooled(blob));
+		else
+			features.push_back(extractBlobMatrix(blob));
 	}
 
 	return features;
@@ -432,10 +468,10 @@ static void augPT(const Mat &img, Size sz, vector<Mat> &images)
 	images.push_back(OpenCV::gammaCorrection(img, 0.5));
 }
 
-vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers, int augFlags)
+vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags, int augFlags)
 {
 	if ((augFlags & 0xff00) == 0)
-		return extractMulti(img, layers);
+		return extractMulti(img, layers, featureFlags);
 	vector<Mat> images;
 	if (augFlags & 0x0100)
 		augKri(img, p->inputGeometry, images);
@@ -445,7 +481,7 @@ vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers, in
 		augPT(img, p->inputGeometry, images);
 	vector<Mat> ftsM;
 	for (uint i = 0; i < images.size(); i++) {
-		vector<Mat> fts = extractMulti(images[i], layers);
+		vector<Mat> fts = extractMulti(images[i], layers, featureFlags);
 		for (uint j = 0; j < fts.size(); j++) {
 			if (i == 0)
 				ftsM.push_back(Mat::zeros(1, fts[j].cols, CV_32F));

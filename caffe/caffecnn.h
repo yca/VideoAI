@@ -27,8 +27,8 @@ public:
 	Mat extract(const Mat &img, const QString &layerName);
 	Mat extractLinear(const Mat &img, const QString &layerName);
 	Mat extractLinear(const Mat &img, const QStringList &layers);
-	vector<Mat> extractMulti(const Mat &img, const QStringList &layers);
-	vector<Mat> extractMulti(const Mat &img, const QStringList &layers, int augFlags);
+	vector<Mat> extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags);
+	vector<Mat> extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags, int augFlags);
 
 	void printLayerInfo();
 	void printLayerInfo(const QStringList &layers);
