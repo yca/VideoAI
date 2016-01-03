@@ -376,6 +376,85 @@ vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers)
 	return features;
 }
 
+static void augKri(const Mat &img, Size sz, vector<Mat> &images)
+{
+	int W = sz.width;
+	int H = sz.height;
+	int X = 256, Y = 256;
+	Mat imgr;
+	cv::resize(img, imgr, Size(X, Y));
+	images.push_back(img);
+	images.push_back(imgr(Rect(0, 0, W, H)));
+	images.push_back(imgr(Rect(X - W, 0, W, H)));
+	images.push_back(imgr(Rect(0, Y - W, W, H)));
+	images.push_back(imgr(Rect(X - W, Y - W, W, H)));
+	images.push_back(imgr(Rect((X - W) / 2, (Y - W) / 2, W, H)));
+	int size = images.size();
+	for (int i = 0; i < size; i++) {
+		Mat flipped;
+		cv::flip(images[i], flipped, 1);
+		images.push_back(flipped);
+	}
+}
+
+static void augRaz(const Mat &img, Size sz, vector<Mat> &images)
+{
+	int w = img.cols;
+	int h = img.rows;
+	int tw = sz.width < w ? sz.width : w / 2;
+	int th = sz.height < h ? sz.height : h / 2;
+	int x = w - tw;
+	int y = h - th;
+	images.push_back(img);
+	images.push_back(img(Rect(0, 0, tw, th)));
+	images.push_back(img(Rect(x, 0, tw, th)));
+	images.push_back(img(Rect(0, y, tw, th)));
+	images.push_back(img(Rect(x, y, tw, th)));
+	images.push_back(img(Rect(x / 2, y / 2, tw, th)));
+	images.push_back(OpenCV::rotate(img, 5));
+	images.push_back(OpenCV::rotate(img, -5));
+	int size = images.size();
+	for (int i = 0; i < size; i++) {
+		Mat flipped;
+		cv::flip(images[i], flipped, 1);
+		images.push_back(flipped);
+	}
+}
+
+static void augPT(const Mat &img, Size sz, vector<Mat> &images)
+{
+	Q_UNUSED(sz);
+	/*assert (img.type() == CV_8UC3);
+	Mat m;
+	img.convertTo(m, CV_32FC3);
+	qDebug() << img.type() <<
+	assert(0);*/
+	images.push_back(OpenCV::gammaCorrection(img, 0.5));
+}
+
+vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers, int augFlags)
+{
+	if ((augFlags & 0xff00) == 0)
+		return extractMulti(img, layers);
+	vector<Mat> images;
+	if (augFlags & 0x0100)
+		augKri(img, p->inputGeometry, images);
+	if (augFlags & 0x0200)
+		augRaz(img, p->inputGeometry, images);
+	if (augFlags & 0x0400)
+		augPT(img, p->inputGeometry, images);
+	vector<Mat> ftsM;
+	for (uint i = 0; i < images.size(); i++) {
+		vector<Mat> fts = extractMulti(images[i], layers);
+		for (uint j = 0; j < fts.size(); j++) {
+			if (i == 0)
+				ftsM.push_back(Mat::zeros(1, fts[j].cols, CV_32F));
+			ftsM[j] += fts[j] / images.size();
+		}
+	}
+	return ftsM;
+}
+
 void CaffeCnn::printLayerInfo()
 {
 	for (uint i = 0; i < p->net->layer_names().size(); i++) {
