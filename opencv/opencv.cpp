@@ -51,6 +51,54 @@ Mat OpenCV::merge(const vector<Mat> &vec, MergeMethod mm)
 	return m;
 }
 
+Mat OpenCV::rotate(const Mat &img, float angle)
+{
+	if (angle == 90) {
+		Mat dst;
+		transpose(img, dst);
+		flip(dst, dst, 1);
+		return dst;
+	} else if (angle == -90 || angle == 270) {
+		Mat dst;
+		transpose(img, dst);
+		flip(dst, dst, 0);
+		return dst;
+	}
+	int len = std::max(img.cols, img.rows);
+	cv::Point2f pt(len/2., len/2.);
+	cv::Mat r = cv::getRotationMatrix2D(pt, angle, 1.0);
+	Mat dst;
+	cv::warpAffine(img, dst, r, cv::Size(img.rows, img.cols));
+	return dst;
+}
+
+Mat OpenCV::gammaCorrection(const Mat &img, float gamma)
+{
+	unsigned char lut[256];
+	for (int i = 0; i < 256; i++)
+		lut[i] = saturate_cast<uchar>(pow((float)(i / 255.0), gamma) * 255.0f);
+	Mat dst = img.clone();
+	const int channels = dst.channels();
+	switch (channels) {
+		case 1: {
+			MatIterator_<uchar> it, end;
+			for (it = dst.begin<uchar>(), end = dst.end<uchar>(); it != end; it++)
+				*it = lut[(*it)];
+			break;
+		}
+		case 3: {
+			MatIterator_<Vec3b> it, end;
+			for (it = dst.begin<Vec3b>(), end = dst.end<Vec3b>(); it != end; it++) {
+				(*it)[0] = lut[((*it)[0])];
+				(*it)[1] = lut[((*it)[1])];
+				(*it)[2] = lut[((*it)[2])];
+			}
+			break;
+		}
+	}
+	return dst;
+}
+
 float OpenCV::getL1Norm(const Mat &m1)
 {
 	return norm(m1, NORM_L1);

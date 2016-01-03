@@ -25,6 +25,8 @@ public:
 		MM_MAX,
 	};
 	static Mat merge(const vector<Mat> &vec, MergeMethod mm = MM_CONCAT);
+	static Mat rotate(const Mat &img, float angle);
+	static Mat gammaCorrection(const Mat &img, float gamma);
 signals:
 
 public slots:
