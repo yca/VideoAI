@@ -44,11 +44,28 @@ public:
 
 static __thread ThreadData *threadData = NULL;
 
-struct TrainInfo
+class TrainInfo
 {
+public:
+	TrainInfo()
+	{
+		preprocess = 0;
+	}
+
+	TrainInfo(const TrainInfo *other, int pp)
+	{
+		useForTest = other->useForTest;
+		useForTrain = other->useForTrain;
+		label = other->label;
+		preprocess = pp;
+		imageFileName = other->imageFileName;
+	}
+
 	bool useForTrain;
 	bool useForTest;
 	int label;
+	uint preprocess;
+	QString imageFileName;
 };
 
 static Mat getBow(const Mat &ids, int cols)
@@ -142,6 +159,55 @@ static vector<Mat> subSampleImage(const Mat &img, int L)
 	return images;
 }
 
+#define TRANS_CROP1			0x01
+#define TRANS_CROP2			0x02
+#define TRANS_CROP3			0x04
+#define TRANS_CROP4			0x08
+#define TRANS_CROP5			0x10
+#define TRANS_ROTATE_CW		0x20
+#define TRANS_ROTATE_CCW	0x40
+#define TRANS_PT			0x80
+#define TRANS_FLIP_HOR		0x100
+
+static void augmentTrainData(QList<TrainInfo *> &trainInfo, TrainInfo *info, int dataAug)
+{
+	if (dataAug & 0x02) {
+		/* Razavian style */
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR);
+		trainInfo << new TrainInfo(info, TRANS_CROP1);
+		trainInfo << new TrainInfo(info, TRANS_CROP2);
+		trainInfo << new TrainInfo(info, TRANS_CROP3);
+		trainInfo << new TrainInfo(info, TRANS_CROP4);
+		trainInfo << new TrainInfo(info, TRANS_CROP5);
+		trainInfo << new TrainInfo(info, TRANS_ROTATE_CW);
+		trainInfo << new TrainInfo(info, TRANS_ROTATE_CCW);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP1);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP2);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP3);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP4);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP5);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_ROTATE_CW);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_ROTATE_CCW);
+	}
+	if (dataAug & 0x01) {
+		/* Kriz style */
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR);
+		trainInfo << new TrainInfo(info, TRANS_CROP1);
+		trainInfo << new TrainInfo(info, TRANS_CROP2);
+		trainInfo << new TrainInfo(info, TRANS_CROP3);
+		trainInfo << new TrainInfo(info, TRANS_CROP4);
+		trainInfo << new TrainInfo(info, TRANS_CROP5);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP1);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP2);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP3);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP4);
+		trainInfo << new TrainInfo(info, TRANS_FLIP_HOR | TRANS_CROP5);
+	}
+	if (dataAug & 0x04) {
+		trainInfo << new TrainInfo(info, TRANS_PT);
+	}
+}
+
 ClassificationPipeline::ClassificationPipeline(QObject *parent) :
 	PipelineManager(parent)
 {
@@ -178,28 +244,45 @@ ClassificationPipeline::ClassificationPipeline(const ClassificationPipeline::par
 
 const RawBuffer ClassificationPipeline::readNextImage()
 {
-	while (1) {
-		if (images.size() <= 0)
-			return RawBuffer(this);
-		QString iname;
-		int index;
-		if (trainInfo.size()) {
-			index = trainInfo.size() - images.size();
-			iname = images.takeFirst();
-			TrainInfo *info = trainInfo[index];
-			if (info->useForTest == false && info->useForTrain == false)
-				continue;
-		} else {
-			index = imageCount - images.size();
-			iname = images.takeFirst();
-		}
-		CVBuffer buf(OpenCV::loadImage(iname, pars.imFlags));
-		buf.pars()->metaData = iname.toUtf8();
-		buf.pars()->streamBufferNo = index;
-		buf.pars()->videoWidth = buf.getReferenceMat().cols;
-		buf.pars()->videoHeight = buf.getReferenceMat().rows;
-		return buf;
-	}
+	if (datasetIndex >= trainInfo.size())
+		return RawBuffer(this);
+	TrainInfo *info = trainInfo[datasetIndex++];
+	if (info->useForTest == false && info->useForTrain == false)
+		return RawBuffer("application/empty", 1);
+	Mat img = OpenCV::loadImage(info->imageFileName, pars.imFlags);
+	int w = img.cols;
+	int h = img.rows;
+	int modelW = 227 * 2;
+	int modelH = 227 * 2;
+	int tw = modelW < w ? modelW : w / 2;
+	int th = modelH < h ? modelH : h / 2;
+	int x = w - tw;
+	int y = h - th;
+	if (info->preprocess & TRANS_CROP1)
+		img = img(Rect(0, 0, tw, th));
+	if (info->preprocess & TRANS_CROP2)
+		img = img(Rect(x, 0, tw, th));
+	if (info->preprocess & TRANS_CROP3)
+		img = img(Rect(0, y, tw, th));
+	if (info->preprocess & TRANS_CROP4)
+		img = img(Rect(x, y, tw, th));
+	if (info->preprocess & TRANS_CROP5)
+		img = img(Rect(x / 2, y / 2, tw, th));
+	if (info->preprocess & TRANS_ROTATE_CW)
+		img = OpenCV::rotate(img, pars.rotationDegree);
+	if (info->preprocess & TRANS_ROTATE_CCW)
+		img = OpenCV::rotate(img, -1 * pars.rotationDegree);
+	if (info->preprocess & TRANS_PT)
+		img = OpenCV::gammaCorrection(img, 0.5);
+	if (info->preprocess & TRANS_FLIP_HOR)
+		cv::flip(img, img, 1);
+
+	CVBuffer buf(img);
+	buf.pars()->metaData = info->imageFileName.toUtf8();
+	buf.pars()->streamBufferNo = datasetIndex - 1;
+	buf.pars()->videoWidth = buf.getReferenceMat().cols;
+	buf.pars()->videoHeight = buf.getReferenceMat().rows;
+	return buf;
 }
 
 const RawBuffer ClassificationPipeline::readNextLMDBImageFeature()
@@ -531,14 +614,14 @@ RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
 	return createNewBuffer(c->extractLinear(img, featureLayer), buf);
 }
 
-const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, CaffeCnn *c)
+static const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, CaffeCnn *c, int aug)
 {
 	QStringList layers;
 	if (layerDesc == "__all__")
 		layers = c->getBlobbedLayerNames();
 	else
 		layers = layerDesc.split("&");
-	const vector<Mat> fts = c->extractMulti(img, layers);
+	const vector<Mat> fts = c->extractMulti(img, layers, aug);
 	return fts;
 }
 
@@ -551,13 +634,15 @@ RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int p
 	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
 	CVBuffer *cbuf = (CVBuffer *)&buf;
 	const Mat &img = cbuf->getReferenceMat();
+	int index = buf.constPars()->streamBufferNo;
+	TrainInfo *info = trainInfo[index];
 
 	if (pars.targetCaffeModel < 0) {
 		QStringList cnnLayers = pars.cnnFeatureLayer.split(",");
 		assert(cnnLayers.size() == list.size());
 		vector<vector<Mat> > all;
 		for (int i = 0; i < list.size(); ++i) {
-			const vector<Mat> fts = extractCnnFeatures(img, cnnLayers[i], list[i]);
+			const vector<Mat> fts = extractCnnFeatures(img, cnnLayers[i], list[i], info->useForTest ? pars.dataAug : 0);
 			all.push_back(fts);
 		}
 		if (pars.featureMergingMethod == 0) { //concat all
@@ -587,7 +672,7 @@ RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int p
 
 	/* use single model */
 	CaffeCnn *c = list[pars.targetCaffeModel];
-	vector<Mat> fts = extractCnnFeatures(img, pars.cnnFeatureLayer, c);
+	vector<Mat> fts = extractCnnFeatures(img, pars.cnnFeatureLayer, c, info->useForTest ? pars.dataAug : 0);
 	if (pars.featureMergingMethod == 0) //concat
 		return createNewBuffer(OpenCV::merge(fts), buf);
 	else if (pars.featureMergingMethod == 1) //sum pooling
@@ -793,6 +878,7 @@ void ClassificationPipeline::init()
 				.arg(pars.dataPath);
 		if (QFile::exists(trainSetFileName) && pars.useExistingTrainSet) {
 			QStringList lines = Common::importText(trainSetFileName);
+			int ind = 0;
 			foreach (const QString &line, lines) {
 				QStringList vals = line.split(":");
 				if (vals.size() != 3)
@@ -801,9 +887,12 @@ void ClassificationPipeline::init()
 				info->label = vals[0].toInt();
 				info->useForTrain = vals[1].toInt();
 				info->useForTest = vals[2].toInt();
+				info->imageFileName = images[ind++];
 				trainInfo << info;
+
+				if (info->useForTrain)
+					augmentTrainData(trainInfo, info, pars.dataAug);
 			}
-			assert(trainInfo.size() == imageCount);
 		} else {
 			/* split into train/test */
 			if (pars.trainListTxt.isEmpty())
@@ -845,12 +934,13 @@ void ClassificationPipeline::init()
 					else if (val == 2)
 						info->useForTest = true;
 					info->label = cats[fi.dir().absolutePath().split("/").last()];
+					info->imageFileName = images[i];
 					assert(info->label);
 					trainInfo << info;
 					lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
-					//if (dm->getDatasetCategory(flds[1]) != info->label)
-						//qDebug() << dm->getDatasetCategory(flds[1]) << info->label << images[i];
-					//assert(dm->getDatasetCategory(flds[1]) == info->label);
+
+					if (info->useForTrain)
+						augmentTrainData(trainInfo, info, pars.dataAug);
 				}
 				lines << "";
 				Common::exportText(lines.join("\n"), trainSetFileName);
@@ -876,6 +966,7 @@ void ClassificationPipeline::init()
 							  );
 		testFile->open(QIODevice::WriteOnly);
 		expectedFrameCount = 0;
+		datasetIndex = 0;
 		for (int i = 0; i < trainInfo.size(); i++)
 			if (trainInfo[i]->useForTest || trainInfo[i]->useForTrain)
 				expectedFrameCount++;
@@ -1051,8 +1142,12 @@ void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileNam
 			info->useForTrain = true;
 		else if (OpenCV::matContains(me, cp))
 			info->useForTest = true;
+		info->imageFileName = images[i];
 		trainInfo << info;
 		lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
+
+		if (info->useForTrain)
+			augmentTrainData(trainInfo, info, pars.dataAug);
 	}
 	lines << "";
 	Common::exportText(lines.join("\n"), trainSetFileName);

@@ -142,6 +142,8 @@ public:
 		QString caffeImageMeanProto;
 		int targetCaffeModel;
 		int featureMergingMethod;
+		int dataAug;
+		int rotationDegree;
 	};
 	parameters pars;
 
@@ -202,6 +204,7 @@ protected:
 	QMutex tdlock;
 	QList<ThreadData *> threadsData;
 	QList<TrainInfo *> trainInfo;
+	int datasetIndex;
 };
 
 #endif
