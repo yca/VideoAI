@@ -614,14 +614,14 @@ RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
 	return createNewBuffer(c->extractLinear(img, featureLayer), buf);
 }
 
-static const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, CaffeCnn *c, int aug)
+static const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, const QString &descTypes, CaffeCnn *c, int aug)
 {
 	QStringList layers;
 	if (layerDesc == "__all__")
 		layers = c->getBlobbedLayerNames();
 	else
 		layers = layerDesc.split("&");
-	const vector<Mat> fts = c->extractMulti(img, layers, aug);
+	const vector<Mat> fts = c->extractMulti(img, layers, descTypes.split("&"), aug);
 	return fts;
 }
 
@@ -639,10 +639,11 @@ RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int p
 
 	if (pars.targetCaffeModel < 0) {
 		QStringList cnnLayers = pars.cnnFeatureLayer.split(",");
+		QStringList cnnLayerTypes = pars.cnnFeatureLayerType.split(",");
 		assert(cnnLayers.size() == list.size());
 		vector<vector<Mat> > all;
 		for (int i = 0; i < list.size(); ++i) {
-			const vector<Mat> fts = extractCnnFeatures(img, cnnLayers[i], list[i], info->useForTest ? pars.dataAug : 0);
+			const vector<Mat> fts = extractCnnFeatures(img, cnnLayers[i], cnnLayerTypes[i], list[i], info->useForTest ? pars.dataAug : 0);
 			all.push_back(fts);
 		}
 		if (pars.featureMergingMethod == 0) { //concat all
@@ -672,7 +673,7 @@ RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int p
 
 	/* use single model */
 	CaffeCnn *c = list[pars.targetCaffeModel];
-	vector<Mat> fts = extractCnnFeatures(img, pars.cnnFeatureLayer, c, info->useForTest ? pars.dataAug : 0);
+	vector<Mat> fts = extractCnnFeatures(img, pars.cnnFeatureLayer, pars.cnnFeatureLayerType, c, info->useForTest ? pars.dataAug : 0);
 	if (pars.featureMergingMethod == 0) //concat
 		return createNewBuffer(OpenCV::merge(fts), buf);
 	else if (pars.featureMergingMethod == 1) //sum pooling
@@ -725,7 +726,7 @@ RawBuffer ClassificationPipeline::createMulti(const RawBuffer &buf, int priv)
 
 	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
 	QString featureLayer = pars.cnnFeatureLayer;
-	vector<Mat> features = list[priv]->extractMulti(cbuf->getReferenceMat(), featureLayer.split("@"));
+	vector<Mat> features = list[priv]->extractMulti(cbuf->getReferenceMat(), featureLayer.split("@"), pars.cnnFeatureLayerType.split("@"));
 
 	Mat fts = features[0];
 #if 0

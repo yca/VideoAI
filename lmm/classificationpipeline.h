@@ -144,6 +144,7 @@ public:
 		int featureMergingMethod;
 		int dataAug;
 		int rotationDegree;
+		QString cnnFeatureLayerType;
 	};
 	parameters pars;
 
