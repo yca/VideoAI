@@ -335,8 +335,7 @@ RawBuffer ClassificationPipeline::detectKeypoints(const RawBuffer &buf, int priv
 		kpts = OpenCV::importKeyPoints(fname);
 	else {
 		kpts = extractDenseKeypoints(cbuf->getReferenceMat(), pars.xStep);
-		if (pars.exportData)
-			OpenCV::exportKeyPoints(fname, kpts);
+		OpenCV::exportKeyPoints(fname, kpts);
 	}
 
 	return createNewBuffer(kpts, cbuf->getReferenceMat(), buf);
@@ -345,7 +344,7 @@ RawBuffer ClassificationPipeline::detectKeypoints(const RawBuffer &buf, int priv
 RawBuffer ClassificationPipeline::extractFeatures(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
-	if (buf.getMimeType() != "applicaiton/cv-kpts")
+	if (buf.getMimeType() != "application/cv-kpts")
 		return RawBuffer();
 	CVBuffer *cbuf = (CVBuffer *)&buf;
 	QString imname = QString::fromUtf8(buf.constPars()->metaData);
@@ -476,7 +475,7 @@ RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
 	int index = buf.constPars()->streamBufferNo;
 	TrainInfo *info = trainInfo[index];
 	CVBuffer *cbuf = (CVBuffer *)&buf;
-	const Mat &desc = cbuf->getReferenceMat();
+	const Mat &desc = cbuf->getReferenceMat() / OpenCV::getL2Norm(cbuf->getReferenceMat());
 	int label = info->label;
 	QString line = QString("%1 ").arg(label);
 	float *data = (float *)desc.row(0).data;
@@ -511,7 +510,7 @@ RawBuffer ClassificationPipeline::exportForSvmMulti(const RawBuffer &buf, int pr
 	int label = info->label;
 	const vector<Mat> &fts = cbuf->getVector();
 	for (uint k = 0; k < fts.size(); k++) {
-		const Mat &desc = fts[k];
+		const Mat &desc = fts[k] / OpenCV::getL2Norm(fts[k]);
 
 		QString line = QString("%1 ").arg(label);
 		float *data = (float *)desc.row(0).data;
@@ -877,7 +876,33 @@ void ClassificationPipeline::init()
 
 		QString trainSetFileName = QString("%1/train_set.txt")
 				.arg(pars.dataPath);
-		if (QFile::exists(trainSetFileName) && pars.useExistingTrainSet) {
+		if (pars.datasetName == "voc") {
+			images.clear();
+			QList<QPair<int, QString> > list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "trainval", "bus");
+			for (int i = 0; i < list.size(); i++) {
+				const QPair<int, QString> &p = list[i];
+				TrainInfo *info = new TrainInfo;
+				info->label = p.first;
+				info->useForTrain = true;
+				info->useForTest = false;
+				info->imageFileName = p.second;
+				trainInfo << info;
+				images << info->imageFileName;
+				augmentTrainData(trainInfo, info, pars.dataAug);
+			}
+			list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "test", "bus");
+			for (int i = 0; i < list.size(); i++) {
+				const QPair<int, QString> &p = list[i];
+				TrainInfo *info = new TrainInfo;
+				info->label = p.first;
+				info->useForTrain = false;
+				info->useForTest = true;
+				info->imageFileName = p.second;
+				images << info->imageFileName;
+				trainInfo << info;
+			}
+			imageCount = images.size();
+		} else if (QFile::exists(trainSetFileName) && pars.useExistingTrainSet) {
 			QStringList lines = Common::importText(trainSetFileName);
 			int ind = 0;
 			foreach (const QString &line, lines) {
@@ -1308,7 +1333,7 @@ int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *p, const RawBuffer &
 		static int cnt = 0;
 		//if (++cnt % 100 == 0 || cnt > 9140)
 			//ffDebug() << buf.constPars()->streamBufferNo << cnt;
-		ffDebug() << buf.constPars()->streamBufferNo << cnt++ << p->getOutputQueue(0)->getFps();
+		ffDebug() << buf.constPars()->streamBufferNo << cnt++ << p->getOutputQueue(0)->getFps() << expectedFrameCount;
 	}
 
 	return 0;

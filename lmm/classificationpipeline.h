@@ -68,6 +68,8 @@ public:
 	int processBlocking(int ch)
 	{
 		RawBuffer buf = (enc->*mfunc)();
+		if (buf.getMimeType() == "application/empty")
+			return 0;
 		if (getOutputQueue(0)->getBufferCount() > 500)
 			usleep(1000 * 100);
 		return newOutputBuffer(ch, buf);
