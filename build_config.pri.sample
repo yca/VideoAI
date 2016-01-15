@@ -1,0 +1,3 @@
+VLFEAT_PATH = /home/amenmd/myfs/source-codes/oss/vlfeat-0.9.20/
+INSTALL_PREFIX = /home/amenmd/myfs/source-codes/bilkon/build/
+CAFFE_PATH = /home/amenmd/myfs/source-codes/oss/caffe/distribute
