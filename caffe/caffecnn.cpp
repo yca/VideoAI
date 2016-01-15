@@ -511,6 +511,20 @@ void CaffeCnn::printLayerInfo(const QStringList &layers)
 	}
 }
 
+void CaffeCnn::printLayerInfo(const QString &modelFile, bool printEmpty)
+{
+	shared_ptr<Net<float> > net;
+	net.reset(new Net<float>(modelFile.toStdString(), TEST));
+	for (uint i = 0; i < net->layer_names().size(); i++) {
+		QString layer = QString::fromStdString(net->layer_names()[i]);
+		if (net->has_blob(layer.toStdString())) {
+			const shared_ptr<Blob<float> > blob = net->blob_by_name(layer.toStdString());
+			qDebug() << layer << blob->width() << blob->height() << blob->channels() << blob->count() << blob->num();
+		} else if (printEmpty)
+			qDebug() << layer;
+	}
+}
+
 QStringList CaffeCnn::getBlobbedLayerNames()
 {
 	QStringList list;

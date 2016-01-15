@@ -31,8 +31,10 @@ public:
 	vector<Mat> extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags, int augFlags);
 
 	void printLayerInfo();
+	static void printLayerInfo(const QString &modelFile, bool printEmpty = false);
 	void printLayerInfo(const QStringList &layers);
 	QStringList getBlobbedLayerNames();
+
 signals:
 
 public slots:
