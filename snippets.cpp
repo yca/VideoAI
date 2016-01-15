@@ -647,6 +647,27 @@ void Snippets::getAP(const QString &resultsFile, const QString &predictInputs, c
 	qDebug("mean average precision is %f", map / ccnt);
 }
 
+void Snippets::getAP(const QString &resultsFile, const QString &predictInputs)
+{
+	QHash<QString, int> cats;
+	cats.insert("bus", 6);
+	int ccnt = cats.size();
+	QList<QHash<int, float> > probs;
+	QList<int> results = readSvmResults(resultsFile, probs);
+	QList<int> truth = getPredictInputs(predictInputs);
+
+	/* calculate per-class average precisions */
+	float map = 0;
+	QList<float> APs;
+	for (int i = 0; i < ccnt; i++) {
+		float ap = getAveragePrecision(i + 1, results, probs, truth);
+		map += ap;
+		APs << ap;
+		qDebug("%s AP: %f", qPrintable(cats.key(i + 1)), ap);
+	}
+	qDebug("mean average precision is %f", map / ccnt);
+}
+
 float Snippets::getAcc(const QString &resultsFile, const QString &predictInputs, QHash<int, float> &perClassAcc)
 {
 	QList<QHash<int, float> > probs;
