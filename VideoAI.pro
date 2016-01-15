@@ -127,11 +127,12 @@ lmm {
 }
 
 caffe {
-    INCLUDEPATH += /home/amenmd/myfs/tasks/cuda/caffe_master/caffe/distribute/include/
-    LIBS += -L/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/distribute/lib -lcaffe
+    INCLUDEPATH += $$CAFFE_PATH/include/
+    LIBS += -L$$CAFFE_PATH/lib -lcaffe
     LIBS += -lglog -lgflags -lprotobuf
     LIBS += -lboost_system -lboost_thread -lhdf5 -lhdf5_cpp -lhdf5_hl
-    LIBS += -L/usr/lib64/atlas -lsatlas -llmdb
+    LIBS += -L/usr/lib64/atlas -llmdb
+    #-lsatlas
     DEFINES += HAVE_CAFFE
 }
 
