@@ -4,6 +4,8 @@
 
 #include <errno.h>
 
+#include <QFile>
+
 static inline int getNonZeroCount(const Mat &data)
 {
 	int dcount = 0;
@@ -62,6 +64,40 @@ LibLinear::~LibLinear()
 	nodes.clear();
 	delete prob;
 	delete pars;
+}
+
+int LibLinear::merge(const QString &fileName1, const QString &fileName2, const QString &outputName, int featureCount)
+{
+	QFile f1(fileName1);
+	QFile f2(fileName2);
+	QFile fout(outputName);
+	assert(f1.open(QIODevice::ReadOnly));
+	assert(f2.open(QIODevice::ReadOnly));
+	assert(fout.open(QIODevice::WriteOnly));
+	int lcnt = 0;
+	while (!f1.atEnd()) {
+		assert(!f2.atEnd());
+		const QByteArray l1 = f1.readLine();
+		fout.write(l1.left(l1.size() - 1));
+		const QByteArray l2 = f2.readLine();
+		const QList<QByteArray> list2 = l2.split(' ');
+		for (int i = 1; i < list2.size(); ++i) {
+			const QList<QByteArray> vals = list2[i].split(':');
+			int ind = vals[0].toInt();
+			if (!ind)
+				continue;
+			fout.write(QString::number(ind + featureCount).toUtf8());
+			fout.write(":");
+			fout.write(vals[1]);
+			fout.write(" ");
+		}
+		fout.write("\n");
+		qDebug() << lcnt++;
+	}
+	f1.close();
+	f2.close();
+	fout.close();
+	return 0;
 }
 
 int LibLinear::setDataSize(int size, int fSize)

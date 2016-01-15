@@ -17,6 +17,8 @@ public:
 	explicit LibLinear(QObject *parent = 0);
 	~LibLinear();
 
+	static int merge(const QString &fileName1, const QString &fileName2, const QString &outputName, int featureCount);
+
 	int setDataSize(int size, int fSize);
 	void setCost(double c);
 	int addData(const Mat &data, const Mat &label);
