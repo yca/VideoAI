@@ -15,7 +15,7 @@
 #include <QSemaphore>
 #include <QStringList>
 
-#include "LmmElements.h"
+#include "lmmelements.h"
 
 class QFile;
 class DatasetManager;

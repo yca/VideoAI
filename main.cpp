@@ -160,6 +160,8 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 		}
 		if (pars.createDict || pars.cl == ClassificationPipeline::CLASSIFY_BOW)
 			pl = new BowPipeline(pars);
+		else if (pars.cl == ClassificationPipeline::CLASSIFY_BOW)
+			pl = new BowPipeline(pars);
 		else
 			pl = new CnnPipeline(pars);
 	} else

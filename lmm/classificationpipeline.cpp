@@ -547,7 +547,7 @@ int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *p, const RawBuffer &
 		static int cnt = 0;
 		//if (++cnt % 100 == 0 || cnt > 9140)
 			//ffDebug() << buf.constPars()->streamBufferNo << cnt;
-		ffDebug() << buf.constPars()->streamBufferNo << cnt++ << p->getOutputQueue(0)->getFps() << expectedFrameCount;
+		ffDebug() << buf.constPars()->streamBufferNo << ++cnt << p->getOutputQueue(0)->getFps() << expectedFrameCount;
 	}
 
 	return 0;
