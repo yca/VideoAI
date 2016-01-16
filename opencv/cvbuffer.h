@@ -37,6 +37,10 @@ public:
 	void setReferenceMat(const cv::Mat &m);
 	std::vector<cv::KeyPoint> & getKeypoints() const;
 	std::vector<cv::Mat> & getVector() const;
+
+	static RawBuffer createNewBuffer(const std::vector<cv::KeyPoint> &kpts, const cv::Mat &m, const RawBuffer &buf);
+	static RawBuffer createNewBuffer(const std::vector<cv::Mat> &fts, const RawBuffer &buf);
+	static RawBuffer createNewBuffer(const cv::Mat &m, const RawBuffer &buf);
 signals:
 
 public slots:

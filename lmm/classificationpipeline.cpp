@@ -11,127 +11,13 @@
 #include <lmm/baselmmpipeline.h>
 
 #include <QDir>
-#include <QFileInfo>
+#include <QFile>
 #include <QApplication>
 
 #include <errno.h>
 
-#if CV_MAJOR_VERSION > 2
-#include <opencv2/xfeatures2d/nonfree.hpp>
-#else
-#include <opencv2/nonfree/features2d.hpp>
-#endif
-#if CV_MAJOR_VERSION > 2
-using namespace xfeatures2d;
-#endif
-
 #define createEl(_func, _priv) new OpElement<ClassificationPipeline>(this, &ClassificationPipeline::_func, _priv,  #_func)
 #define createEl2(_func) new OpSrcElement<ClassificationPipeline>(this, &ClassificationPipeline::_func, #_func)
-
-class ThreadData
-{
-public:
-	ThreadData()
-	{
-		py = NULL;
-	}
-
-	Pyramids *py;
-	VlHomogeneousKernelMap *map;
-	QList<CaffeCnn *> cnns;
-	QStringList inetCats;
-};
-
-static __thread ThreadData *threadData = NULL;
-
-class TrainInfo
-{
-public:
-	TrainInfo()
-	{
-		preprocess = 0;
-	}
-
-	TrainInfo(const TrainInfo *other, int pp)
-	{
-		useForTest = other->useForTest;
-		useForTrain = other->useForTrain;
-		label = other->label;
-		preprocess = pp;
-		imageFileName = other->imageFileName;
-	}
-
-	bool useForTrain;
-	bool useForTest;
-	int label;
-	uint preprocess;
-	QString imageFileName;
-};
-
-static Mat getBow(const Mat &ids, int cols)
-{
-	Mat py = Mat::zeros(1, cols, CV_32F);
-	for (int j = 0; j < ids.rows; j++)
-		py.at<float>(ids.at<uint>(j)) += 1;
-	return py / OpenCV::getL1Norm(py);
-}
-
-static int histCount(int L)
-{
-	int binCount = 0;
-	for (int i = 0; i <= L; i++)
-		binCount += pow(4, i);
-	return binCount;
-}
-
-static RawBuffer createNewBuffer(const vector<KeyPoint> &kpts, const Mat &m, const RawBuffer &buf)
-{
-	CVBuffer c2(kpts);
-	c2.setReferenceMat(m);
-	c2.pars()->metaData = buf.constPars()->metaData;
-	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
-	c2.pars()->videoWidth = buf.constPars()->videoWidth;
-	c2.pars()->videoHeight = buf.constPars()->videoHeight;
-	return c2;
-}
-
-static RawBuffer createNewBuffer(const vector<Mat> &fts, const RawBuffer &buf)
-{
-	CVBuffer c2(fts);
-	c2.pars()->metaData = buf.constPars()->metaData;
-	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
-	c2.pars()->videoWidth = buf.constPars()->videoWidth;
-	c2.pars()->videoHeight = buf.constPars()->videoHeight;
-	return c2;
-}
-
-static RawBuffer createNewBuffer(const Mat &m, const RawBuffer &buf)
-{
-	CVBuffer c2(m);
-	c2.pars()->metaData = buf.constPars()->metaData;
-	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
-	c2.pars()->videoWidth = buf.constPars()->videoWidth;
-	c2.pars()->videoHeight = buf.constPars()->videoHeight;
-	return c2;
-}
-
-static Mat mergeBuffersOrdered(const Mat &m1, const Mat &m2, int size1)
-{
-	Mat m(1, m1.cols + m2.cols, CV_32F);
-	if (m1.cols == size1) {
-		for (int i = 0; i < m1.cols; i++)
-			m.at<float>(0, i) = m1.at<float>(0, i);
-		for (int i = 0; i < m2.cols; i++)
-			m.at<float>(0, m1.cols + i) = m2.at<float>(0, i);
-	} else if (m2.cols == size1) {
-		for (int i = 0; i < m1.cols; i++)
-			m.at<float>(0, m2.cols + i) = m1.at<float>(0, i);
-		for (int i = 0; i < m2.cols; i++)
-			m.at<float>(0, i) = m2.at<float>(0, i);
-	} else
-		assert(0);
-	return m;
-}
 
 static Mat mergeBuffers(const Mat &m1, const Mat &m2)
 {
@@ -143,6 +29,7 @@ static Mat mergeBuffers(const Mat &m1, const Mat &m2)
 	return m;
 }
 
+#if 0
 static vector<Mat> subSampleImage(const Mat &img, int L)
 {
 	vector<Mat> images;
@@ -158,6 +45,7 @@ static vector<Mat> subSampleImage(const Mat &img, int L)
 	}
 	return images;
 }
+#endif
 
 #define TRANS_CROP1			0x01
 #define TRANS_CROP2			0x02
@@ -169,7 +57,7 @@ static vector<Mat> subSampleImage(const Mat &img, int L)
 #define TRANS_PT			0x80
 #define TRANS_FLIP_HOR		0x100
 
-static void augmentTrainData(QList<TrainInfo *> &trainInfo, TrainInfo *info, int dataAug)
+void ClassificationPipeline::augmentTrainData(QList<TrainInfo *> &trainInfo, TrainInfo *info, int dataAug)
 {
 	if (dataAug & 0x02) {
 		/* Razavian style */
@@ -231,15 +119,14 @@ ClassificationPipeline::ClassificationPipeline(QObject *parent) :
 	pars.useExistingTrainSet = true;
 	pars.cl = CLASSIFY_BOW;
 	pars.imFlags = IMREAD_GRAYSCALE;
-
-	init();
+	pars.runId = 0;
 }
 
 ClassificationPipeline::ClassificationPipeline(const ClassificationPipeline::parameters &params, QObject *parent) :
 	PipelineManager(parent)
 {
+	pars.runId = 0;
 	pars = params;
-	init();
 }
 
 const RawBuffer ClassificationPipeline::readNextImage()
@@ -283,187 +170,6 @@ const RawBuffer ClassificationPipeline::readNextImage()
 	buf.pars()->videoWidth = buf.getReferenceMat().cols;
 	buf.pars()->videoHeight = buf.getReferenceMat().rows;
 	return buf;
-}
-
-const RawBuffer ClassificationPipeline::readNextLMDBImageFeature()
-{
-	tdlock.lock();
-	CaffeCnn *c = NULL;
-	if (!threadsData[0]->cnns.size()) {
-		QString filename = pars.lmdbFeaturePath;
-		c = new CaffeCnn;
-		c->load(filename);
-		threadsData[0]->cnns << c;
-	}
-	c = threadsData[0]->cnns.first();
-	tdlock.unlock();
-	if (!c)
-		return RawBuffer(this);
-
-	while (1) {
-		QString key;
-		Mat m = c->readNextFeature(key);
-		int ino = key.toInt();
-		if (!m.rows)
-			return RawBuffer(this);
-		if (ino >= trainInfo.size())
-			continue;
-		if (trainInfo.size() && trainInfo[ino]->useForTrain == false && trainInfo[ino]->useForTest == false)
-			continue;
-		CVBuffer buf(m);
-		buf.pars()->metaData = QString("%1").arg(key).toUtf8();
-		buf.pars()->streamBufferNo = ino;
-		buf.pars()->videoWidth = m.cols;
-		buf.pars()->videoHeight = m.rows;
-		return buf;
-	}
-}
-
-RawBuffer ClassificationPipeline::detectKeypoints(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	vector<KeyPoint> kpts;
-	QString imname = QString::fromUtf8(buf.constPars()->metaData);
-	QString fname = getExportFilename(imname, "kpts");
-
-	/* use existing ones if exists */
-	if (pars.useExisting && QFile::exists(fname))
-		kpts = OpenCV::importKeyPoints(fname);
-	else {
-		kpts = extractDenseKeypoints(cbuf->getReferenceMat(), pars.xStep);
-		OpenCV::exportKeyPoints(fname, kpts);
-	}
-
-	return createNewBuffer(kpts, cbuf->getReferenceMat(), buf);
-}
-
-RawBuffer ClassificationPipeline::extractFeatures(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-kpts")
-		return RawBuffer();
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	QString imname = QString::fromUtf8(buf.constPars()->metaData);
-	QString fname = getExportFilename(imname, "bin");
-	Mat features;
-
-	if (pars.useExisting && QFile::exists(fname))
-		features = OpenCV::importMatrix(fname);
-	else {
-		features = computeFeatures(cbuf->getReferenceMat(), cbuf->getKeypoints());
-		if (pars.exportData)
-			OpenCV::exportMatrix(fname, features);
-	}
-
-	return createNewBuffer(features, buf);
-}
-
-RawBuffer ClassificationPipeline::addToDictPool(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	Mat m;
-	if (pars.dictSubSample)
-		m = OpenCV::subSampleRandom(cbuf->getReferenceMat(), pars.dictSubSample);
-	else if (pars.maxFeaturesPerImage)
-		m = OpenCV::subSampleRandom(cbuf->getReferenceMat(), pars.maxFeaturesPerImage);
-	else
-		m = cbuf->getReferenceMat();
-	dplock.lock();
-	dictPool.push_back(m);
-	dplock.unlock();
-	return buf;
-}
-
-RawBuffer ClassificationPipeline::createIDs(const RawBuffer &buf, int priv)
-{
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	tdlock.lock();
-	Pyramids *py = NULL;
-	if (priv < threadsData.size())
-		py = threadsData[priv]->py;
-	tdlock.unlock();
-	if (!py)
-		return buf;
-
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	QString imname = QString::fromUtf8(buf.constPars()->metaData);
-	QString fname = getExportFilename(imname, "ids");
-	const Mat &fts = cbuf->getReferenceMat();
-
-	Mat ids;
-	if (pars.useExisting && QFile::exists(fname))
-		ids = OpenCV::importMatrix(fname);
-	else {
-		vector<DMatch> matches = py->matchFeatures(fts);
-		ids = Mat(fts.rows, 1, CV_32S);
-		for (uint i = 0; i < matches.size(); i++) {
-			int idx = matches[i].trainIdx;
-			ids.at<int>(i, 0) = idx;
-		}
-		if (pars.exportData)
-			OpenCV::exportMatrix(fname, ids);
-	}
-
-	return createNewBuffer(ids, buf);
-}
-
-RawBuffer ClassificationPipeline::createImageDescriptor(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	const Mat &ids = cbuf->getReferenceMat();
-	if (pars.L == 0)
-		return createNewBuffer(getBow(ids, dict.rows), buf);
-
-	QString imname = QString::fromUtf8(buf.constPars()->metaData);
-	QString fname = getExportFilename(imname, "kpts");
-	vector<KeyPoint> kpts = OpenCV::importKeyPoints(fname);
-
-	int imW = buf.constPars()->videoWidth;
-	int imH = buf.constPars()->videoHeight;
-	const Mat &pyr = Pyramids::makeSpmFromIds(ids, pars.L, imW, imH, kpts, pars.K);
-	return createNewBuffer(pyr, buf);
-}
-
-RawBuffer ClassificationPipeline::mapDescriptor(const RawBuffer &buf, int priv)
-{
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	tdlock.lock();
-	VlHomogeneousKernelMap *map = NULL;
-	if (priv < threadsData.size())
-		map = threadsData[priv]->map;
-	tdlock.unlock();
-	if (!map)
-		return buf;
-
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	const Mat &ft = cbuf->getReferenceMat();
-
-	Mat m = Mat(1, ft.cols * 3, ft.type());
-	for (int j = 0; j < ft.cols; j++) {
-		float d[3];
-		float val = ft.at<float>(0, j);
-		vl_homogeneouskernelmap_evaluate_f(map, d, 1, val);
-		m.at<float>(0, j * 3) = d[0];
-		m.at<float>(0, j * 3 + 1) = d[1];
-		m.at<float>(0, j * 3 + 2) = d[2];
-	}
-
-	return createNewBuffer(m, buf);
 }
 
 RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
@@ -557,131 +263,6 @@ RawBuffer ClassificationPipeline::exportForSvmMulti(const RawBuffer &buf, int pr
 	return buf;
 }
 
-RawBuffer ClassificationPipeline::cnnExtract(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	const Mat &img = cbuf->getReferenceMat();
-
-	QString featureLayer = pars.cnnFeatureLayer;
-
-	if (pars.targetCaffeModel < 0) {
-		/* use all models */
-		Mat merged;
-
-		for (int i = 0; i < list.size(); i++) {
-			CaffeCnn *c = list[i];
-			Mat m = c->extractLinear(img, featureLayer);
-			if (pars.featureMergingMethod == 0) {
-				if (i == 0)
-					merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
-				for (int j = 0; j < m.cols; j++)
-					merged.at<float>(0, i * m.cols + j) = m.at<float>(0, j);
-			} else if (pars.featureMergingMethod == 1) {
-				if (i == 0)
-					merged = m;
-				else
-					merged += m;
-			} else if (pars.featureMergingMethod == 2) {
-				if (i == 0)
-					merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
-				for (int j = 0; j < m.cols; j++)
-					merged.at<float>(0, j) = qMax<float>(m.at<float>(0, j), merged.at<float>(0, j));
-			}
-
-		}
-
-		if (pars.featureMergingMethod == 1)
-			merged /= list.size();
-
-		if (pars.featureMergingMethod == 2)
-			merged /= OpenCV::getL2Norm(merged);
-
-		return createNewBuffer(merged, buf);
-	}
-
-	/* use single model */
-	CaffeCnn *c = list[pars.targetCaffeModel];
-	if (!c)
-		return buf;
-	if (featureLayer.contains("&"))
-		return createNewBuffer(c->extractLinear(img, featureLayer.split("&")), buf);
-	return createNewBuffer(c->extractLinear(img, featureLayer), buf);
-}
-
-static const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, const QString &descTypes, CaffeCnn *c, int aug)
-{
-	QStringList layers;
-	if (layerDesc == "__all__")
-		layers = c->getBlobbedLayerNames();
-	else
-		layers = layerDesc.split("&");
-	const vector<Mat> fts = c->extractMulti(img, layers, descTypes.split("&"), aug);
-	return fts;
-}
-
-RawBuffer ClassificationPipeline::cnnExtractMultiFts(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	const Mat &img = cbuf->getReferenceMat();
-	int index = buf.constPars()->streamBufferNo;
-	TrainInfo *info = trainInfo[index];
-
-	if (pars.targetCaffeModel < 0) {
-		QStringList cnnLayers = pars.cnnFeatureLayer.split(",");
-		QStringList cnnLayerTypes = pars.cnnFeatureLayerType.split(",");
-		assert(cnnLayers.size() == list.size());
-		vector<vector<Mat> > all;
-		for (int i = 0; i < list.size(); ++i) {
-			const vector<Mat> fts = extractCnnFeatures(img, cnnLayers[i], cnnLayerTypes[i], list[i], info->useForTest ? pars.dataAug : 0);
-			all.push_back(fts);
-		}
-		if (pars.featureMergingMethod == 0) { //concat all
-			vector<Mat> channels;
-			for (uint i = 0; i < all.size(); ++i)
-				channels.push_back(OpenCV::merge(all[i]));
-			return createNewBuffer(OpenCV::merge(channels), buf);
-		} else {
-			vector<vector<Mat> > all2;
-			for (uint i = 0; i < all[0].size(); i++)
-				all2.push_back(vector<Mat>());
-			for (uint i = 0; i < all.size(); ++i) {
-				const vector<Mat> &model = all[i];
-				for (uint j = 0; j < model.size(); j++)
-					all2[j].push_back(model[j]);
-			}
-			vector<Mat> channels;
-			OpenCV::MergeMethod method = OpenCV::MM_SUM;
-			if (pars.featureMergingMethod == 2)
-				method = OpenCV::MM_MAX;
-			for (uint i = 0; i < all2.size(); ++i)
-				channels.push_back(OpenCV::merge(all2[i], method));
-			return createNewBuffer(OpenCV::merge(channels), buf);
-		}
-		assert(0);
-	}
-
-	/* use single model */
-	CaffeCnn *c = list[pars.targetCaffeModel];
-	vector<Mat> fts = extractCnnFeatures(img, pars.cnnFeatureLayer, pars.cnnFeatureLayerType, c, info->useForTest ? pars.dataAug : 0);
-	if (pars.featureMergingMethod == 0) //concat
-		return createNewBuffer(OpenCV::merge(fts), buf);
-	else if (pars.featureMergingMethod == 1) //sum pooling
-		return createNewBuffer(OpenCV::merge(fts, OpenCV::MM_SUM), buf);
-	else if (pars.featureMergingMethod == 2) //max pooling
-		return createNewBuffer(OpenCV::merge(fts, OpenCV::MM_MAX), buf);
-	return createNewBuffer(fts, buf);
-}
-
 RawBuffer ClassificationPipeline::mergeFeatures(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(priv);
@@ -695,11 +276,11 @@ RawBuffer ClassificationPipeline::mergeFeatures(const RawBuffer &buf, int priv)
 		int bowSize = histCount(pars.L) * pars.K;
 		if (pars.homkermap)
 			bowSize *= 3;
-		return createNewBuffer(mergeBuffersOrdered(cbuf1->getReferenceMat(), cbuf2->getReferenceMat(), bowSize), buf);
+		return CVBuffer::createNewBuffer(mergeBuffersOrdered(cbuf1->getReferenceMat(), cbuf2->getReferenceMat(), bowSize), buf);
 #else
 		if (buf.constPars()->duration < buf.constPars()->duration)
-			return createNewBuffer(mergeBuffers(cbuf1->getReferenceMat(), cbuf2->getReferenceMat()), buf);
-		return createNewBuffer(mergeBuffers(cbuf2->getReferenceMat(), cbuf1->getReferenceMat()), buf);
+			return CVBuffer::createNewBuffer(mergeBuffers(cbuf1->getReferenceMat(), cbuf2->getReferenceMat()), buf);
+		return CVBuffer::createNewBuffer(mergeBuffers(cbuf2->getReferenceMat(), cbuf1->getReferenceMat()), buf);
 #endif
 	} else
 		buffers.insert(sno, buf);
@@ -709,88 +290,12 @@ RawBuffer ClassificationPipeline::mergeFeatures(const RawBuffer &buf, int priv)
 
 RawBuffer ClassificationPipeline::debugBuffer(const RawBuffer &buf, int priv)
 {
-	//ffDebug() << buf.size() << priv << buf.constPars()->streamBufferNo;
-	return createNewBuffer(Mat(1, 1 + priv, CV_32F), buf);
-}
-
-RawBuffer ClassificationPipeline::createMulti(const RawBuffer &buf, int priv)
-{
-	Q_UNUSED(priv);
-	if (buf.getMimeType() != "application/cv-mat")
-		return RawBuffer();
-
-	CVBuffer *cbuf = (CVBuffer *)&buf;
-	//vector<KeyPoint> kpts = extractDenseKeypoints(cbuf->getReferenceMat(), pars.xStep);
-	//QString imname = QString::fromUtf8(buf.constPars()->metaData);
-
-	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
-	QString featureLayer = pars.cnnFeatureLayer;
-	vector<Mat> features = list[priv]->extractMulti(cbuf->getReferenceMat(), featureLayer.split("@"), pars.cnnFeatureLayerType.split("@"));
-
-	Mat fts = features[0];
-#if 0
-	/* bow ids */
-	tdlock.lock();
-	Pyramids *py = NULL;
-	if (priv < threadsData.size())
-		py = threadsData[priv]->py;
-	VlHomogeneousKernelMap *map = NULL;
-	if (priv < threadsData.size())
-		map = threadsData[priv]->map;
-	tdlock.unlock();
-	assert(py);
-	assert(map);
-	Mat ids;
-	vector<DMatch> matches = py->matchFeatures(fts);
-	ids = Mat(fts.rows, 1, CV_32S);
-	for (uint i = 0; i < matches.size(); i++) {
-		int idx = matches[i].trainIdx;
-		ids.at<int>(i, 0) = idx;
-	}
-	/* create bow descriptor from ids */
-	int imW = buf.constPars()->videoWidth;
-	int imH = buf.constPars()->videoHeight;
-	const Mat &ft = Pyramids::makeSpmFromIds(ids, pars.L, imW, imH, kpts, pars.K);
-	int bowSize = histCount(pars.L) * pars.K;
-#else
-	int off = 0;
-	Mat ft(1, fts.rows * fts.cols, CV_32F);
-	for (int i = 0; i < fts.rows; i++)
-		for (int j = 0; j < fts.cols; j++)
-			ft.at<float>(0, off++) = fts.at<float>(i, j);
-	int bowSize = fts.rows * fts.cols;
-#endif
-
-	/* apply homgen kernel mapping */
-#if 0
-	Mat m = Mat(1, ft.cols * 3, ft.type());
-	for (int j = 0; j < ft.cols; j++) {
-		float d[3];
-		float val = ft.at<float>(0, j);
-		vl_homogeneouskernelmap_evaluate_f(map, d, 1, val);
-		m.at<float>(0, j * 3) = d[0];
-		m.at<float>(0, j * 3 + 1) = d[1];
-		m.at<float>(0, j * 3 + 2) = d[2];
-	}
-	bowSize *= 3;
-#else
-	Mat m = ft;
-#endif
-
-	/* merge 2 features */
-	RawBuffer bufout = createNewBuffer(mergeBuffersOrdered(m, features[1], bowSize), buf);
-	bufout.pars()->duration = priv;
-	return bufout;
+	ffDebug() << buf.size() << priv << buf.constPars()->streamBufferNo;
+	return CVBuffer::createNewBuffer(Mat(1, 1 + priv, CV_32F), buf);
 }
 
 void ClassificationPipeline::pipelineFinished()
 {
-	if (pars.createDict) {
-		Mat dict = Pyramids::clusterFeatures(dictPool, pars.K);
-		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
-		ffDebug() << fname << dict.rows << dict.cols;
-		OpenCV::exportMatrix(fname, dict);
-	}
 	if (trainFile)
 		trainFile->close();
 	if (testFile)
@@ -806,16 +311,21 @@ void ClassificationPipeline::pipelineFinished()
 
 void ClassificationPipeline::init()
 {
-	dm = new DatasetManager;
-	if (pars.datasetName == "ucf101")
-		dm->addUCF101(pars.datasetPath, "/home/amenmd/myfs/tasks/video_analysis/dataset/ucf/ucfTrainTestlist");
-	else
-		dm->addDataset(pars.datasetName, pars.datasetPath);
-	images = dm->dataSetImages(pars.datasetName);
-	dm->exportImages(pars.datasetName, QString("%1/image_list.txt").arg(pars.dataPath));
-	imageCount = images.size();
-	finishedCount = 0;
-	expectedFrameCount = imageCount;
+	/* init thread branch data */
+	createThreadData();
+
+	/* init dataset */
+	createDatasetInfo();
+
+	/* create processing pipeline */
+	createPipeline();
+
+	/* adjust expected frame count for pipeline progress tracking */
+	datasetIndex = 0;
+	expectedFrameCount = 0;
+	for (int i = 0; i < trainInfo.size(); i++)
+		if (trainInfo[i]->useForTest || trainInfo[i]->useForTrain)
+			expectedFrameCount++;
 
 	if (pars.maxMemBytes) {
 		int fsize = 128;
@@ -826,9 +336,23 @@ void ClassificationPipeline::init()
 		else if (pars.ft == FEAT_CNN)
 			fsize = 96;
 		int dsize = fsize * 4;
-		pars.maxFeaturesPerImage = (double)(pars.maxMemBytes) / imageCount / dsize;
+		pars.maxFeaturesPerImage = (double)(pars.maxMemBytes) / trainInfo.size() / dsize;
 		pars.dictSubSample = 0;
 	}
+}
+
+void ClassificationPipeline::createDatasetInfo()
+{
+	dm = new DatasetManager;
+	if (pars.datasetName == "ucf101")
+		dm->addUCF101(pars.datasetPath, "/home/amenmd/myfs/tasks/video_analysis/dataset/ucf/ucfTrainTestlist");
+	else
+		dm->addDataset(pars.datasetName, pars.datasetPath);
+	images = dm->dataSetImages(pars.datasetName);
+	dm->exportImages(pars.datasetName, QString("%1/image_list.txt").arg(pars.dataPath));
+	imageCount = images.size();
+	finishedCount = 0;
+	expectedFrameCount = imageCount;
 
 	QDir d = QDir::current();
 	d.mkpath(pars.dataPath);
@@ -844,275 +368,108 @@ void ClassificationPipeline::init()
 		}
 		assert(images.size() == imageCount);
 	}
+}
 
-	/* create processing pipeline */
-	if (pars.createDict)
-		createDictPipeline();
-	else if (pars.cl == CLASSIFY_BOW)
-		createBOWPipeline();
-	else if (pars.cl == CLASSIFY_CNN_SVM)
-		createCNNFSVMPipeline();
-	else if (pars.cl == CLASSIFY_CNN_BOW)
-		createCNNBOWPipeline();
-	else if (pars.cl == CLASSIFY_CNN_MULTIFTS)
-		createCNNMultiFts();
-
-	for (int i = 0; i < pars.threads; i++) {
-		ThreadData *data = new ThreadData;
-		data->py = NULL;
-		data->map =  NULL;
-		threadsData << data;
-	}
-
-	if (!pars.createDict) {
-		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
-		dict = OpenCV::importMatrix(fname);
-		for (int i = 0; i < pars.threads; i++) {
-			ThreadData *data = threadsData[i];
-			data->py = new Pyramids;
-			data->py->setDict(dict);
-			data->map =  vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, pars.gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
+void ClassificationPipeline::initTrainTest()
+{
+	QString trainSetFileName = QString("%1/train_set.txt")
+			.arg(pars.dataPath);
+	if (pars.datasetName == "voc") {
+		images.clear();
+		QList<QPair<int, QString> > list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "trainval", "bus");
+		for (int i = 0; i < list.size(); i++) {
+			const QPair<int, QString> &p = list[i];
+			TrainInfo *info = new TrainInfo;
+			info->label = p.first;
+			info->useForTrain = true;
+			info->useForTest = false;
+			info->imageFileName = p.second;
+			trainInfo << info;
+			images << info->imageFileName;
+			augmentTrainData(trainInfo, info, pars.dataAug);
 		}
+		list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "test", "bus");
+		for (int i = 0; i < list.size(); i++) {
+			const QPair<int, QString> &p = list[i];
+			TrainInfo *info = new TrainInfo;
+			info->label = p.first;
+			info->useForTrain = false;
+			info->useForTest = true;
+			info->imageFileName = p.second;
+			images << info->imageFileName;
+			trainInfo << info;
+		}
+		imageCount = images.size();
+	} else if (QFile::exists(trainSetFileName) && pars.useExistingTrainSet) {
+		QStringList lines = Common::importText(trainSetFileName);
+		int ind = 0;
+		foreach (const QString &line, lines) {
+			QStringList vals = line.split(":");
+			if (vals.size() != 3)
+				continue;
+			TrainInfo *info = new TrainInfo;
+			info->label = vals[0].toInt();
+			info->useForTrain = vals[1].toInt();
+			info->useForTest = vals[2].toInt();
+			info->imageFileName = images[ind++];
+			trainInfo << info;
 
-		QString trainSetFileName = QString("%1/train_set.txt")
-				.arg(pars.dataPath);
-		if (pars.datasetName == "voc") {
-			images.clear();
-			QList<QPair<int, QString> > list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "trainval", "bus");
-			for (int i = 0; i < list.size(); i++) {
-				const QPair<int, QString> &p = list[i];
-				TrainInfo *info = new TrainInfo;
-				info->label = p.first;
-				info->useForTrain = true;
-				info->useForTest = false;
-				info->imageFileName = p.second;
-				trainInfo << info;
-				images << info->imageFileName;
+			if (info->useForTrain)
 				augmentTrainData(trainInfo, info, pars.dataAug);
-			}
-			list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "test", "bus");
-			for (int i = 0; i < list.size(); i++) {
-				const QPair<int, QString> &p = list[i];
-				TrainInfo *info = new TrainInfo;
-				info->label = p.first;
-				info->useForTrain = false;
-				info->useForTest = true;
-				info->imageFileName = p.second;
-				images << info->imageFileName;
-				trainInfo << info;
-			}
-			imageCount = images.size();
-		} else if (QFile::exists(trainSetFileName) && pars.useExistingTrainSet) {
-			QStringList lines = Common::importText(trainSetFileName);
-			int ind = 0;
-			foreach (const QString &line, lines) {
-				QStringList vals = line.split(":");
-				if (vals.size() != 3)
+		}
+	} else {
+		/* split into train/test */
+		if (pars.trainListTxt.isEmpty())
+			createTrainTestSplit(trainSetFileName);
+		else {
+			QHash<QString, int> tthash;
+			QHash<QString, int> cats;
+			QStringList trainList = Common::importText(pars.trainListTxt);
+			for (int j = 0; j < trainList.size(); j++) {
+				QStringList flds = trainList[j].trimmed().split(" ");
+				QString name = flds[0].remove(".avi");
+				if (name.isEmpty())
 					continue;
+				QStringList vals = name.split("/");
+				tthash.insert(vals.last(), 1);
+				int cat = flds[1].trimmed().toInt();
+				assert(cat);
+				cats.insert(vals.first(), cat);
+			}
+			QStringList testList = Common::importText(pars.testListTxt);
+			for (int j = 0; j < testList.size(); j++) {
+				QStringList flds = testList[j].trimmed().split(" ");
+				QString name = flds[0].remove(".avi");
+				if (name.isEmpty())
+					continue;
+				tthash.insert(name.split("/").last(), 2);
+			}
+			QStringList lines;
+			for (int i = 0; i < images.size(); i++) {
 				TrainInfo *info = new TrainInfo;
-				info->label = vals[0].toInt();
-				info->useForTrain = vals[1].toInt();
-				info->useForTest = vals[2].toInt();
-				info->imageFileName = images[ind++];
+				info->useForTrain = info->useForTest = false;
+				QFileInfo fi(images[i]);
+				QStringList flds = fi.baseName().split("_");
+				flds.removeLast();
+				QString key = flds.join("_");
+				int val = tthash[key];
+				if (val == 1)
+					info->useForTrain = true;
+				else if (val == 2)
+					info->useForTest = true;
+				info->label = cats[fi.dir().absolutePath().split("/").last()];
+				info->imageFileName = images[i];
+				assert(info->label);
 				trainInfo << info;
+				lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
 
 				if (info->useForTrain)
 					augmentTrainData(trainInfo, info, pars.dataAug);
 			}
-		} else {
-			/* split into train/test */
-			if (pars.trainListTxt.isEmpty())
-				createTrainTestSplit(trainSetFileName);
-			else {
-				QHash<QString, int> tthash;
-				QHash<QString, int> cats;
-				QStringList trainList = Common::importText(pars.trainListTxt);
-				for (int j = 0; j < trainList.size(); j++) {
-					QStringList flds = trainList[j].trimmed().split(" ");
-					QString name = flds[0].remove(".avi");
-					if (name.isEmpty())
-						continue;
-					QStringList vals = name.split("/");
-					tthash.insert(vals.last(), 1);
-					int cat = flds[1].trimmed().toInt();
-					assert(cat);
-					cats.insert(vals.first(), cat);
-				}
-				QStringList testList = Common::importText(pars.testListTxt);
-				for (int j = 0; j < testList.size(); j++) {
-					QStringList flds = testList[j].trimmed().split(" ");
-					QString name = flds[0].remove(".avi");
-					if (name.isEmpty())
-						continue;
-					tthash.insert(name.split("/").last(), 2);
-				}
-				QStringList lines;
-				for (int i = 0; i < images.size(); i++) {
-					TrainInfo *info = new TrainInfo;
-					info->useForTrain = info->useForTest = false;
-					QFileInfo fi(images[i]);
-					QStringList flds = fi.baseName().split("_");
-					flds.removeLast();
-					QString key = flds.join("_");
-					int val = tthash[key];
-					if (val == 1)
-						info->useForTrain = true;
-					else if (val == 2)
-						info->useForTest = true;
-					info->label = cats[fi.dir().absolutePath().split("/").last()];
-					info->imageFileName = images[i];
-					assert(info->label);
-					trainInfo << info;
-					lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
-
-					if (info->useForTrain)
-						augmentTrainData(trainInfo, info, pars.dataAug);
-				}
-				lines << "";
-				Common::exportText(lines.join("\n"), trainSetFileName);
-			}
+			lines << "";
+			Common::exportText(lines.join("\n"), trainSetFileName);
 		}
-
-		trainFile = new QFile(QString("%1/svm_train_ftype%2_K%3_step%4_L%5_gamma%6.txt")
-							  .arg(pars.dataPath)
-							  .arg(pars.ft)
-							  .arg(pars.K)
-							  .arg(pars.xStep)
-							  .arg(pars.L)
-							  .arg(pars.gamma)
-							  );
-		trainFile->open(QIODevice::WriteOnly);
-		testFile = new QFile(QString("%1/svm_test_ftype%2_K%3_step%4_L%5_gamma%6.txt")
-							  .arg(pars.dataPath)
-							  .arg(pars.ft)
-							  .arg(pars.K)
-							  .arg(pars.xStep)
-							  .arg(pars.L)
-							  .arg(pars.gamma)
-							  );
-		testFile->open(QIODevice::WriteOnly);
-		expectedFrameCount = 0;
-		datasetIndex = 0;
-		for (int i = 0; i < trainInfo.size(); i++)
-			if (trainInfo[i]->useForTest || trainInfo[i]->useForTrain)
-				expectedFrameCount++;
 	}
-}
-
-void ClassificationPipeline::createDictPipeline()
-{
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	BaseLmmElement *node1 = p1->getPipe(p1->getPipeCount() - 1);
-	QList<BaseLmmElement *> join1;
-	for (int i = 0; i < pars.threads; i++) {
-		p1->insert(node1, createEl(detectKeypoints, i));
-		p1->append(createEl(extractFeatures, i));
-		p1->append(createEl(addToDictPool, i));
-		join1 << p1->getPipe(p1->getPipeCount() - 1);
-	}
-	p1->end(join1);
-	//p1->appendJoin(createEl(addToDictPool, 0), join1);
-	//p1->end();
-}
-
-void ClassificationPipeline::createBOWPipeline()
-{
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	BaseLmmElement *node1 = p1->getPipe(p1->getPipeCount() - 1);
-	QList<BaseLmmElement *> join1;
-	for (int i = 0; i < pars.threads; i++) {
-		p1->insert(node1, createEl(detectKeypoints, i));
-		p1->append(createEl(extractFeatures, i));
-		p1->append(createEl(createIDs, i));
-		p1->append(createEl(createImageDescriptor, i));
-		if (pars.homkermap)
-			p1->append(createEl(mapDescriptor, i));
-		join1 << p1->getPipe(p1->getPipeCount() - 1);
-	}
-	p1->appendJoin(createEl(exportForSvm, 0), join1);
-	p1->end();
-}
-
-void ClassificationPipeline::createCNNFSVMPipeline()
-{
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	p1->append(createEl(cnnExtract, 0));
-	if (pars.homkermap)
-		p1->append(createEl(mapDescriptor, 0));
-	p1->append(createEl(exportForSvm, 0));
-	p1->end();
-}
-
-void ClassificationPipeline::createCNNBOWPipeline()
-{
-#if 0
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	p1->append(new BufferCloner);
-
-	/* create split node */
-	BaseLmmElement *node1 = p1->getPipe(p1->getPipeCount() - 1);
-	QList<BaseLmmElement *> join1;
-
-	/* create bow part */
-	//p1->insert(node1, createEl(debugBuffer, 0));
-	p1->insert(node1, createEl(detectKeypoints, 0));
-	p1->append(createEl(extractFeatures, 0));
-	p1->append(createEl(createIDs, 0));
-	p1->append(createEl(createImageDescriptor, 0));
-	if (pars.homkermap)
-		p1->append(createEl(mapDescriptor, 0));
-	join1 << p1->getPipe(p1->getPipeCount() - 1);
-
-	/* create cnn part */
-	//p1->insert(node1, createEl(debugBuffer, 1), 1);
-	p1->insert(node1, createEl(cnnExtract, 0), 1);
-	if (pars.homkermap)
-		p1->append(createEl(mapDescriptor, 0));
-	join1 << p1->getPipe(p1->getPipeCount() - 1);
-
-	/* now join */
-	//p1->appendJoin(createEl(debugBuffer, 2), join1);
-	p1->appendJoin(createEl(mergeFeatures, 0), join1);
-	p1->append(createEl(exportForSvm, 0), 0);
-	p1->end();
-#elif 0
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	p1->append(createEl(createMulti, 0));
-	p1->append(createEl(exportForSvm, 0), 0);
-	p1->end();
-#else
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	p1->append(new BufferCloner);
-
-	/* create split node */
-	BaseLmmElement *node1 = p1->getPipe(p1->getPipeCount() - 1);
-	QList<BaseLmmElement *> join1;
-
-	p1->insert(node1, createEl(createMulti, 0), 0);
-	join1 << p1->getPipe(p1->getPipeCount() - 1);
-
-	p1->insert(node1, createEl(createMulti, 1), 1);
-	join1 << p1->getPipe(p1->getPipeCount() - 1);
-
-	p1->appendJoin(createEl(mergeFeatures, 0), join1);
-	p1->append(createEl(exportForSvm, 0), 0);
-	p1->end();
-#endif
-}
-
-void ClassificationPipeline::createCNNMultiFts()
-{
-	BaseLmmPipeline *p1 = addPipeline();
-	p1->append(createEl2(readNextImage));
-	p1->append(createEl(cnnExtractMultiFts, 0));
-	p1->append(createEl(exportForSvmMulti, 0));
-	p1->end();
 }
 
 void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileName)
@@ -1179,149 +536,6 @@ void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileNam
 	Common::exportText(lines.join("\n"), trainSetFileName);
 }
 
-QString ClassificationPipeline::getExportFilename(const QString &imname, const QString &suffix)
-{
-	QFileInfo fi(imname);
-	return QString("%1/%2_ftype%3.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.ft).arg(suffix);
-}
-
-std::vector<KeyPoint> ClassificationPipeline::extractDenseKeypoints(const Mat &m, int step)
-{
-	vector<KeyPoint> keypoints;
-	if (pars.ft == FEAT_CNN) {
-		for (int i = 0; i < pars.spatialSize; i++) {
-			for (int j = 0; j < pars.spatialSize; j++) {
-				KeyPoint kpt;
-				int step = m.cols / pars.spatialSize;
-				kpt.pt.x = j * step;
-				kpt.pt.y = i * step;
-				keypoints.push_back(kpt);
-			}
-		}
-	} else {
-		DenseFeatureDetector dec(11.f, 1, 0.1f, step, 0);
-		dec.detect(m, keypoints);
-	}
-	return keypoints;
-}
-
-std::vector<KeyPoint> ClassificationPipeline::extractKeypoints(const Mat &m)
-{
-	vector<KeyPoint> keypoints;
-	if (pars.ft == FEAT_SIFT) {
-		SiftFeatureDetector dec;
-		dec.detect(m, keypoints);
-	} else if (pars.ft == FEAT_SURF) {
-		SurfFeatureDetector dec;
-		dec.detect(m, keypoints);
-	} else if (pars.ft == FEAT_CNN) {
-		for (int i = 0; i < 55; i++) {
-			for (int j = 0; j < 55; j++) {
-				KeyPoint kpt;
-				kpt.pt.x = j * 4;
-				kpt.pt.y = i * 4;
-				keypoints.push_back(kpt);
-			}
-		}
-	}
-	return keypoints;
-}
-
-Mat ClassificationPipeline::computeFeatures(const Mat &m, std::vector<KeyPoint> &keypoints)
-{
-	Mat features;
-	if (pars.ft == FEAT_SIFT) {
-		SiftDescriptorExtractor ex;
-		ex.compute(m, keypoints, features);
-	} else if (pars.ft == FEAT_SURF) {
-		SurfDescriptorExtractor ex;
-		ex.compute(m, keypoints, features);
-	} else if (pars.ft == FEAT_CNN) {
-		const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
-		QString featureLayer = pars.cnnFeatureLayer;
-		return list[0]->extract(m, featureLayer);
-	}
-	return features;
-}
-
-const QList<CaffeCnn *> ClassificationPipeline::getCurrentThreadCaffe(int priv)
-{
-#if 0
-	tdlock.lock();
-	if (priv < threadsData.size()) {
-		if (!threadsData[priv]->cnns.size()) {
-			QString cbase = pars.caffeBaseDir;
-			QString deployProto = pars.caffeDeployProto;
-			QString modelFile = pars.caffeModelFile;
-			QString imageMeanProto = pars.caffeImageMeanProto;
-
-			if (!deployProto.contains(",")) {
-				CaffeCnn *c = new CaffeCnn;
-				c->load(cbase + deployProto,
-					   cbase + modelFile,
-					   cbase + imageMeanProto,
-					   cbase + "data/ilsvrc12/synset_words.txt");
-				c->printLayerInfo();
-				threadsData[priv]->cnns << c;
-			} else {
-				QStringList l1 = deployProto.split(",");
-				QStringList l2 = modelFile.split(",");
-				QStringList l3 = imageMeanProto.split(",");
-				assert(l1.size() == l2.size());
-				assert(l1.size() == l3.size());
-				for (int i = 0; i < l1.size(); i++) {
-					CaffeCnn *c = new CaffeCnn;
-					assert(c->load(cbase + l1[i],
-						   cbase + l2[i],
-						   cbase + l3[i],
-						   cbase + "data/ilsvrc12/synset_words.txt") == 0);
-					c->printLayerInfo();
-					threadsData[priv]->cnns << c;
-				}
-			}
-		}
-	}
-	QList<CaffeCnn *> list = threadsData[priv]->cnns;
-	tdlock.unlock();
-	return list;
-#else
-	if (!threadData) {
-		threadData = new ThreadData;
-		QString cbase = pars.caffeBaseDir;
-		QString deployProto = pars.caffeDeployProto;
-		QString modelFile = pars.caffeModelFile;
-		QString imageMeanProto = pars.caffeImageMeanProto;
-
-		if (!deployProto.contains(",")) {
-			CaffeCnn *c = new CaffeCnn;
-			c->load(cbase + deployProto,
-				   cbase + modelFile,
-				   cbase + imageMeanProto,
-				   cbase + "data/ilsvrc12/synset_words.txt");
-			c->printLayerInfo();
-			threadData->cnns << c;
-		} else {
-			QStringList l1 = deployProto.split(",");
-			QStringList l2 = modelFile.split(",");
-			QStringList l3 = imageMeanProto.split(",");
-			assert(l1.size() == l2.size());
-			assert(l1.size() == l3.size());
-			for (int i = 0; i < l1.size(); i++) {
-				CaffeCnn *c = new CaffeCnn;
-				assert(c->load(cbase + l1[i],
-					   cbase + l2[i],
-					   cbase + l3[i],
-					   cbase + "data/ilsvrc12/synset_words.txt") == 0);
-				c->printLayerInfo();
-				threadData->cnns << c;
-			}
-		}
-	}
-	QList<CaffeCnn *> list = threadData->cnns;
-	return list;
-#endif
-}
-
 int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *p, const RawBuffer &buf)
 {
 	Q_UNUSED(buf);
@@ -1337,10 +551,4 @@ int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *p, const RawBuffer &
 	}
 
 	return 0;
-}
-
-int SourceLmmElement::processBlocking(int ch)
-{
-	Q_UNUSED(ch);
-	return newOutputBuffer(ch, RawBuffer("video/x-raw-yuv", 1024));
 }

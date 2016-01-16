@@ -2,6 +2,9 @@
 #include "common.h"
 #include "snippets.h"
 #include "imps/caltechbench.h"
+
+#include "lmm/bowpipeline.h"
+#include "lmm/cnnpipeline.h"
 #include "lmm/classificationpipeline.h"
 
 #include <QDir>
@@ -109,6 +112,7 @@ static void myMessageOutput(QtMsgType type, const QMessageLogContext &context, c
 	setParInt(dataAug); \
 	setParInt(rotationDegree); \
 	setParStr(cnnFeatureLayerType); \
+	setParInt(runId); \
 
 static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[])
 {
@@ -154,9 +158,13 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 			flds << mi.value().trimmed();
 			setAllPars();
 		}
-		pl = new ClassificationPipeline(pars);
+		if (pars.createDict || pars.cl == ClassificationPipeline::CLASSIFY_BOW)
+			pl = new BowPipeline(pars);
+		else
+			pl = new CnnPipeline(pars);
 	} else
-		pl = new ClassificationPipeline;
+		pl = new BowPipeline;
+	pl->init();
 	pl->start();
 	return a.exec();
 }

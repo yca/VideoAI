@@ -54,6 +54,37 @@ std::vector<Mat> &CVBuffer::getVector() const
 	return dd->vec2;
 }
 
+RawBuffer CVBuffer::createNewBuffer(const std::vector<cv::KeyPoint> &kpts, const Mat &m, const RawBuffer &buf)
+{
+	CVBuffer c2(kpts);
+	c2.setReferenceMat(m);
+	c2.pars()->metaData = buf.constPars()->metaData;
+	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
+	c2.pars()->videoWidth = buf.constPars()->videoWidth;
+	c2.pars()->videoHeight = buf.constPars()->videoHeight;
+	return c2;
+}
+
+RawBuffer CVBuffer::createNewBuffer(const std::vector<Mat> &fts, const RawBuffer &buf)
+{
+	CVBuffer c2(fts);
+	c2.pars()->metaData = buf.constPars()->metaData;
+	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
+	c2.pars()->videoWidth = buf.constPars()->videoWidth;
+	c2.pars()->videoHeight = buf.constPars()->videoHeight;
+	return c2;
+}
+
+RawBuffer CVBuffer::createNewBuffer(const Mat &m, const RawBuffer &buf)
+{
+	CVBuffer c2(m);
+	c2.pars()->metaData = buf.constPars()->metaData;
+	c2.pars()->streamBufferNo = buf.constPars()->streamBufferNo;
+	c2.pars()->videoWidth = buf.constPars()->videoWidth;
+	c2.pars()->videoHeight = buf.constPars()->videoHeight;
+	return c2;
+}
+
 CVBufferData::~CVBufferData()
 {
 

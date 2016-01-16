@@ -1,0 +1,52 @@
+BowPipeline:
+
+Valid Parameters:
+
+    General parameters:
+        cl : Classification pipeline type.
+        imFlags : Image reading flags. If 0 images are read in grayscale, if 1 in color.
+        debug : if true, some debugging messages will be printed.
+        dataAug: Data augmentation flags, use '0' for nothing.
+        rotationDegree: Decides image rotation degree during data augmentation.
+
+    BoW parameters:
+        createDict : true for dictionary creation, false otherwise.
+        threads : number of parallel processing branches, can not be '0'.
+        K : bow dictionary size, should be bigger than '0'.
+        ft : Feature type, supported values: FEAT_SIFT, FEAT_SURF.
+        dictSubSample : If not 0, detected features of every image will be sum-sampled this amount. maxMemBytes overrides this value.
+        maxMemBytes : Available memory in bytes. If set, maxFeaturesPerImage will be automatically calculated.
+        maxFeaturesPerImage : TODO: remove this in favor of dictSubSample or vice-versa.
+        L: Pyramid level for spatial pyramid calculation. If 0, no spatial pyramids will be applied.
+        xStep : Feature extraction step for dense keypoints.
+        yStep : Not used, check xStep.
+        homkermap: If set to true, homogenous chi2 kernel mapping will be applied before exporting for SVM.
+        gamma: gamma value for chi2 kernel mapping.
+
+    Data related parameters:
+        exportData : if true, generated data will be saved to disk whenever possible.
+        useExisting : if true, previously generated data residing in disk will be used whenever possible.
+        dataPath : output folder where to save generated data. Per-image data will be saved in image directories.
+        datasetPath : Path to dataset of images.
+        datasetName : Name of the dataset. Some pre-processing will be applied for some datasets.
+
+    Training related data:
+        trainCount: Number of training data in train-test split. If -1, all data will be used for training.
+        testCount: Number of test data in train-test split. If 0 and trainCount is -1, all data will be used for training.
+        useExistingTrainSet : If set to true, previously generated train-test split will be used.
+        fileListTxt : If not empty, dataset folder will not be scanned for images and images in this file will be used.
+        trainListTxt : If not empty, this list will be used for train-test split instead of random splitting.
+        testListTxt : Check trainListTxt.
+
+    CNN parameters:
+        lmdbFeaturePath :
+        cnnFeatureLayer :
+        spatialSize :
+        caffeBaseDir :
+        caffeDeployProto;
+        caffeModelFile;
+        caffeImageMeanProto;
+        targetCaffeModel;
+        featureMergingMethod;
+        cnnFeatureLayerType;
+

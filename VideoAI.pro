@@ -38,7 +38,9 @@ SOURCES += main.cpp\
     imps/oxfordretrieval.cpp \
     imps/caltechbench.cpp \
     caffe/caffecnn.cpp \
-    lmm/buffercloner.cpp
+    lmm/buffercloner.cpp \
+    lmm/bowpipeline.cpp \
+    lmm/cnnpipeline.cpp
 
 HEADERS  += mainwindow.h \
     scripting/scriptedit.h \
@@ -62,7 +64,10 @@ HEADERS  += mainwindow.h \
     imps/oxfordretrieval.h \
     imps/caltechbench.h \
     caffe/caffecnn.h \
-    lmm/buffercloner.h
+    lmm/buffercloner.h \
+    lmm/bowpipeline.h \
+    lmm/cnnpipeline.h \
+    lmm/lmmelements.h
 
 FORMS    += mainwindow.ui \
     widgets/userscriptwidget.ui
@@ -142,3 +147,6 @@ cuda {
 }
 
 LIBS += -L/usr/lib/libblas -lblas
+
+OTHER_FILES += \
+    docs/pipelines.txt
