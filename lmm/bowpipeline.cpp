@@ -101,9 +101,9 @@ void BowPipeline::createPipeline()
 							 );
 		testFile->open(QIODevice::WriteOnly);
 #else
-		trainFile = new QFile(QString("train%1.txt").arg(pars.runId));
+		trainFile = new QFile(QString("%1/train%2.txt").arg(pars.dataPath).arg(pars.runId));
 		trainFile->open(QIODevice::WriteOnly);
-		testFile = new QFile(QString("test%1.txt").arg(pars.runId));
+		testFile = new QFile(QString("%1/test%2.txt").arg(pars.dataPath).arg(pars.runId));
 		testFile->open(QIODevice::WriteOnly);
 #endif
 	}
