@@ -203,10 +203,39 @@ RawBuffer BowPipeline::createImageDescriptor(const RawBuffer &buf, int priv)
 void BowPipeline::pipelineFinished()
 {
 	if (pars.createDict) {
-		Mat dict = Pyramids::clusterFeatures(dictPool, pars.K);
-		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
-		ffDebug() << fname << dict.rows << dict.cols;
-		OpenCV::exportMatrix(fname, dict);
+		if (pars.K) {
+			Mat dict = Pyramids::clusterFeatures(dictPool, pars.K);
+			QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
+			ffDebug() << fname << dict.rows << dict.cols;
+			OpenCV::exportMatrix(fname, dict);
+		} else {
+			QList<int> list;
+			list << 100;
+			list << 200;
+			list << 300;
+			list << 400;
+			list << 500;
+			list << 600;
+			list << 700;
+			list << 800;
+			list << 900;
+			list << 1000;
+			list << 1500;
+			list << 2000;
+			list << 2500;
+			list << 3000;
+			list << 5000;
+			list << 10000;
+			list << 15000;
+			list << 20000;
+			list << 25000;
+			for (int i = 0; i < list.size(); i++) {
+				Mat dict = Pyramids::clusterFeatures(dictPool, list[i]);
+				QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(list[i]).arg(pars.ft);
+				ffDebug() << fname << dict.rows << dict.cols;
+				OpenCV::exportMatrix(fname, dict);
+			}
+		}
 	}
 
 	ClassificationPipeline::pipelineFinished();
