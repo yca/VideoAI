@@ -466,6 +466,18 @@ Mat OpenCV::createRandomized(int start, int size)
 	return m;
 }
 
+Mat OpenCV::createRandomized(int start, int max, int size)
+{
+	Mat m(size, 1, CV_32F);
+	QList<int> list;
+	for (int i = start; i < start + size; i++)
+		list << i;
+	srand(time(NULL));
+	for (int i = 0; i < m.rows; i++)
+		m.at<float>(i) = list.takeAt(rand() % max);
+	return m;
+}
+
 bool OpenCV::matContains(const Mat &m, int val)
 {
 	for (int i = 0; i < m.rows; i++)
