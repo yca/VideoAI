@@ -15,8 +15,7 @@ DEFINES += DEBUG
 
 include(build_config.pri)
 
-SOURCES += main.cpp\
-        mainwindow.cpp \
+SOURCES += main.cpp \
     scripting/scriptedit.cpp \
     scripting/scripthighlighter.cpp \
     scripting/tabsettings.cpp \
@@ -28,7 +27,6 @@ SOURCES += main.cpp\
     windowmanager.cpp \
     scriptmanager.cpp \
     common.cpp \
-    widgets/userscriptwidget.cpp \
     vlfeat/vlfeat.cpp \
     snippets.cpp \
     svm/liblinear.cpp \
@@ -42,7 +40,7 @@ SOURCES += main.cpp\
     lmm/bowpipeline.cpp \
     lmm/cnnpipeline.cpp
 
-HEADERS  += mainwindow.h \
+HEADERS  += \
     scripting/scriptedit.h \
     scripting/scripthighlighter.h \
     scripting/tabsettings.h \
@@ -54,7 +52,6 @@ HEADERS  += mainwindow.h \
     windowmanager.h \
     scriptmanager.h \
     common.h \
-    widgets/userscriptwidget.h \
     vlfeat/vlfeat.h \
     snippets.h \
     svm/liblinear.h \
@@ -69,13 +66,21 @@ HEADERS  += mainwindow.h \
     lmm/cnnpipeline.h \
     lmm/lmmelements.h
 
-FORMS    += mainwindow.ui \
-    widgets/userscriptwidget.ui
-
 RESOURCES += \
     scripting/images.qrc
 
 CONFIG += opencv2 vlfeat lmm caffe cuda
+
+ui {
+    SOURCES += mainwindow.cpp \
+        widgets/userscriptwidget.cpp
+
+    HEADERS += mainwindow.h \
+        widgets/userscriptwidget.h
+
+    FORMS += mainwindow.ui \
+        widgets/userscriptwidget.ui
+}
 
 opencv2 {
     INCLUDEPATH += /usr/include/opencv
