@@ -311,6 +311,8 @@ void ClassificationPipeline::pipelineFinished()
 
 void ClassificationPipeline::init()
 {
+	checkParameters();
+
 	/* init thread branch data */
 	createThreadData();
 
@@ -470,6 +472,14 @@ void ClassificationPipeline::initTrainTest()
 			Common::exportText(lines.join("\n"), trainSetFileName);
 		}
 	}
+}
+
+void ClassificationPipeline::initSvmFiles()
+{
+	trainFile = new QFile(QString("%1/train%2.txt").arg(pars.dataPath).arg(pars.runId));
+	trainFile->open(QIODevice::WriteOnly);
+	testFile = new QFile(QString("%1/test%2.txt").arg(pars.dataPath).arg(pars.runId));
+	testFile->open(QIODevice::WriteOnly);
 }
 
 void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileName)

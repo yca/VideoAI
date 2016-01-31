@@ -126,6 +126,7 @@ protected:
 	virtual QString getExportFilename(const QString &imname, const QString &suffix) = 0;
 	virtual void createDatasetInfo();
 	virtual void initTrainTest();
+	virtual void initSvmFiles();
 
 	void augmentTrainData(QList<TrainInfo *> &trainInfo, TrainInfo *info, int dataAug);
 	void createTrainTestSplit(const QString &trainSetFileName);

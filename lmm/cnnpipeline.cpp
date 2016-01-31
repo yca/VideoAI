@@ -100,50 +100,12 @@ void CnnPipeline::createPipeline()
 	else if (pars.cl == CLASSIFY_CNN_MULTIFTS)
 		createCNNMultiFts();
 
+	initSvmFiles();
 	initTrainTest();
 }
 
 const QList<CaffeCnn *> CnnPipeline::getCurrentThreadCaffe(int priv)
 {
-#if 0
-	tdlock.lock();
-	if (priv < threadsData.size()) {
-		if (!threadsData[priv]->cnns.size()) {
-			QString cbase = pars.caffeBaseDir;
-			QString deployProto = pars.caffeDeployProto;
-			QString modelFile = pars.caffeModelFile;
-			QString imageMeanProto = pars.caffeImageMeanProto;
-
-			if (!deployProto.contains(",")) {
-				CaffeCnn *c = new CaffeCnn;
-				c->load(cbase + deployProto,
-					   cbase + modelFile,
-					   cbase + imageMeanProto,
-					   cbase + "data/ilsvrc12/synset_words.txt");
-				c->printLayerInfo();
-				threadsData[priv]->cnns << c;
-			} else {
-				QStringList l1 = deployProto.split(",");
-				QStringList l2 = modelFile.split(",");
-				QStringList l3 = imageMeanProto.split(",");
-				assert(l1.size() == l2.size());
-				assert(l1.size() == l3.size());
-				for (int i = 0; i < l1.size(); i++) {
-					CaffeCnn *c = new CaffeCnn;
-					assert(c->load(cbase + l1[i],
-						   cbase + l2[i],
-						   cbase + l3[i],
-						   cbase + "data/ilsvrc12/synset_words.txt") == 0);
-					c->printLayerInfo();
-					threadsData[priv]->cnns << c;
-				}
-			}
-		}
-	}
-	QList<CaffeCnn *> list = threadsData[priv]->cnns;
-	tdlock.unlock();
-	return list;
-#else
 	if (!threadData) {
 		threadData = new CnnThreadData;
 		QString cbase = pars.caffeBaseDir;
@@ -178,18 +140,18 @@ const QList<CaffeCnn *> CnnPipeline::getCurrentThreadCaffe(int priv)
 	}
 	QList<CaffeCnn *> list = threadData->cnns;
 	return list;
-#endif
 }
 
 void CnnPipeline::createThreadData()
 {
-	for (int i = 0; i < pars.threads; i++)
-		threadsData << new CnnThreadData;
 }
 
 int CnnPipeline::checkParameters()
 {
-	return -1;
+	assert(!pars.caffeBaseDir.isEmpty());
+	assert(!pars.caffeDeployProto.isEmpty());
+	assert(!pars.caffeModelFile.isEmpty());
+	return 0;
 }
 
 QString CnnPipeline::getExportFilename(const QString &imname, const QString &suffix)
