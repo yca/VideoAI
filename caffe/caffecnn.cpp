@@ -491,6 +491,31 @@ vector<Mat> CaffeCnn::extractMulti(const Mat &img, const QStringList &layers, co
 	return ftsM;
 }
 
+vector<Mat> CaffeCnn::getFeatureMaps(const QString &layerName)
+{
+	vector<Mat> maps;
+
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+	const float *bdata = blob->cpu_data() + blob->offset(0);
+
+	int off = 0;
+	for (int i = 0; i <blob->channels(); i++) {
+		Mat m2(blob->height(), blob->width(), CV_32F);
+		for (int k = 0; k < m2.rows; k++)
+			for (int j = 0; j < m2.cols; j++)
+				m2.at<float>(k, j) = bdata[off++];
+		maps.push_back(m2);
+	}
+	return maps;
+}
+
+int CaffeCnn::forwardImage(const QString &filename)
+{
+	Mat img = OpenCV::loadImage(filename, -1);
+	forwardImage(img);
+	return 0;
+}
+
 void CaffeCnn::printLayerInfo()
 {
 	for (uint i = 0; i < p->net->layer_names().size(); i++) {
