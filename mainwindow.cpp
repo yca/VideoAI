@@ -28,6 +28,7 @@
 static const QStringList getObjectCompletions(const QMetaObject &obj)
 {
 	QStringList methods;
+#if QT_VERION >= 0x050000
 	for (int j = obj.methodOffset(); j < obj.methodCount(); j++) {
 		const QMetaMethod  &m = obj.method(j);
 		if (m.methodType() == QMetaMethod::Slot ||
@@ -52,6 +53,7 @@ static const QStringList getObjectCompletions(const QMetaObject &obj)
 			methods << method;
 		}
 	}
+#endif
 	return methods;
 }
 
@@ -134,10 +136,12 @@ void MainWindow::scriptTextChanged(const QString &text)
 
 void MainWindow::on_actionInit_Commands_triggered()
 {
+#if QT_VERION >= 0x050000
 	QString text = p->sets.value("autostart").toString();
 	QString newtext = QInputDialog::getMultiLineText(this, trUtf8("Initializing commands"), trUtf8("Please type-in your autostart commands"), text);
 	if (!newtext.isEmpty())
 		p->sets.setValue("autostart", newtext);
+#endif
 }
 
 void MainWindow::on_listHistory_itemDoubleClicked(QListWidgetItem *item)
