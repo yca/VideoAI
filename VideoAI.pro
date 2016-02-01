@@ -38,7 +38,7 @@ SOURCES += main.cpp \
     caffe/caffecnn.cpp \
     lmm/buffercloner.cpp \
     lmm/bowpipeline.cpp \
-    lmm/cnnpipeline.cpp
+    lmm/cnnpipeline.cpp \
 
 HEADERS  += \
     scripting/scriptedit.h \
@@ -64,23 +64,14 @@ HEADERS  += \
     lmm/buffercloner.h \
     lmm/bowpipeline.h \
     lmm/cnnpipeline.h \
-    lmm/lmmelements.h
+    lmm/lmmelements.h \
 
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 vlfeat lmm caffe cuda
+CONFIG += opencv2 vlfeat lmm caffe cuda ui
 
-ui {
-    SOURCES += mainwindow.cpp \
-        widgets/userscriptwidget.cpp
-
-    HEADERS += mainwindow.h \
-        widgets/userscriptwidget.h
-
-    FORMS += mainwindow.ui \
-        widgets/userscriptwidget.ui
-}
+ui { include(widgets/widgets.pri) }
 
 opencv2 {
     INCLUDEPATH += /usr/include/opencv
