@@ -2,10 +2,25 @@
 
 #include <QDir>
 #include <QFile>
+#include <QHashIterator>
 
 Common::Common(QObject *parent) :
 	QObject(parent)
 {
+}
+
+int Common::hashMax(const QHash<int, int> &h)
+{
+	QHashIterator<int, int> i(h);
+	int max = 0, maxi = 0;
+	while (i.hasNext()) {
+		i.next();
+		if (i.value() > max) {
+			max = i.value();
+			maxi = i.key();
+		}
+	}
+	return maxi;
 }
 
 void Common::exportText(const QString text, const QString &filename)

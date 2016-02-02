@@ -98,9 +98,22 @@ Mat Pyramids::clusterFeatures(const Mat &features, int clusterCount)
 	fDebug("will cluster %d features", features.rows);
 	if (features.rows == 0)
 		return Mat();
+#if 1
 	const cvflann::KMeansIndexParams p;
 	Mat centers(clusterCount, features.cols, CV_32F);
 	int ccnt = cv::flann::hierarchicalClustering<flann::L2<float> >(features, centers, p);
+#elif 0
+	Mat labels;
+	Mat centers;
+	cv::kmeans(features, clusterCount, labels, TermCriteria(CV_TERMCRIT_ITER|CV_TERMCRIT_EPS, 5, 0.0001), 5, cv::KMEANS_PP_CENTERS, centers);
+	int ccnt = clusterCount;
+#else
+	int ccnt = clusterCount;
+	Mat idx = OpenCV::createRandomized(0, features.rows, ccnt);
+	Mat centers(ccnt, features.cols, features.type());
+	for (int i = 0; i < ccnt; i++)
+		features.row(idx.at<float>(i, 0)).copyTo(centers.row(i));
+#endif
 	return centers.rowRange(Range(0, ccnt));
 }
 
@@ -117,6 +130,48 @@ Mat Pyramids::makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vect
 		Mat cont = findPointContributions(kpt.pt.x, kpt.pt.y, L, imW, imH);
 		for (int j = 0; j < cont.rows; j++)
 			hists.at<float>(cont.at<float>(j), idx) += 1;
+	}
+	for (int i = 0; i < hists.rows; i++) {
+		Mat h = hists.row(i);
+		float n1 = OpenCV::getL1Norm(h);
+		if (n1 != 0)
+			h /= n1;
+		h.copyTo(hists.row(i));
+	}
+
+	return linear / OpenCV::getL1Norm(linear);
+}
+
+Mat Pyramids::makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int K, const Mat &ids2, const Mat &corr)
+{
+	int binCount = histCount(L);
+	Mat linear = Mat::zeros(1, binCount * K, CV_32F);
+	Mat hists = Mat(binCount, K, CV_32F, linear.data);
+
+	/* calculate histogram values using matches and keypoints */
+	for (int i = 0; i < ids.rows; i++) {
+		int idx = ids.at<int>(i);
+		const KeyPoint kpt = keypoints.at(i);
+		Mat cont = findPointContributions(kpt.pt.x, kpt.pt.y, L, imW, imH);
+
+		uint id2 = ids2.at<uint>(i);
+		Mat c = corr.col(id2);
+		//c /= OpenCV::getL1Norm(c);
+
+		double min, max;
+		Point minl; Point maxl;
+		minMaxLoc(c, &min, &max, &minl, &maxl);
+
+		for (int j = 0; j < cont.rows; j++) {
+			hists.at<float>(cont.at<float>(j), idx) += 1;
+
+			hists.at<float>(cont.at<float>(j), maxl.y) += 1;
+			/*for (int k = 0; k < K; k++) {
+				//assert(is_valid_float(c.at<float>(k), K));
+				//qDebug() << k << c.at<float>(k) << c.cols << c.rows;
+				hists.at<float>(cont.at<float>(j), k) += c.at<float>(k);
+			}*/
+		}
 	}
 	for (int i = 0; i < hists.rows; i++) {
 		Mat h = hists.row(i);

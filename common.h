@@ -10,6 +10,8 @@ class Common : public QObject
 public:
 	explicit Common(QObject *parent = 0);
 
+	static int hashMax(const QHash<int, int> &h);
+	static bool isNan(float x) { return !(x*0.0 == 0.0); }
 signals:
 
 public slots:

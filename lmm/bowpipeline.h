@@ -17,6 +17,8 @@ public:
 	virtual RawBuffer addToDictPool(const RawBuffer &buf, int priv);
 	virtual RawBuffer createIDs(const RawBuffer &buf, int priv);
 	virtual RawBuffer createImageDescriptor(const RawBuffer &buf, int priv);
+	virtual RawBuffer createImageDescriptor2(const RawBuffer &buf, int priv);
+	virtual RawBuffer calcCorr(const RawBuffer &buf, int priv);
 
 signals:
 
@@ -30,12 +32,29 @@ protected:
 
 	void createDictPipeline();
 	void createBOWPipeline();
+	void createCorrPipeline();
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
 	std::vector<cv::KeyPoint> extractKeypoints(const cv::Mat &m);
 	cv::Mat computeFeatures(const cv::Mat &m, std::vector<cv::KeyPoint> &keypoints);
 	virtual RawBuffer mapDescriptor(const RawBuffer &buf, int priv);
 
 	QList<BowThreadData *> threadsData;
+
+	class CorrData {
+	public:
+		CorrData()
+		{
+			cnt = 0;
+			sum = 0;
+			createCorr = false;
+		}
+
+		int cnt;
+		double sum;
+		bool createCorr;
+		cv::Mat confHash;
+	};
+	CorrData corrData;
 };
 
 #endif // BOWPIPELINE_H

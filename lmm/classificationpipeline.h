@@ -29,10 +29,11 @@ public:
 	enum ftype {
 		FEAT_SIFT,
 		FEAT_SURF,
-		FEAT_CNN,
+		FEAT_CNN = 100,
 	};
 	enum cltype {
 		CLASSIFY_BOW,
+		CLASSIFY_BOW_CORR,
 		CLASSIFY_CNN_SVM = 3,
 		CLASSIFY_CNN_BOW,
 		CLASSIFY_CNN_MULTIFTS,

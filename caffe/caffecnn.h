@@ -33,6 +33,7 @@ public:
 	int forwardImage(const QString &filename);
 
 	void printLayerInfo();
+	Mat getLayerDimensions(const QString &layer);
 	static void printLayerInfo(const QString &modelFile, bool printEmpty = false);
 	void printLayerInfo(const QStringList &layers);
 	QStringList getBlobbedLayerNames();

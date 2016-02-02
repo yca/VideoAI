@@ -96,7 +96,7 @@ void CnnPipeline::createPipeline()
 	if (pars.cl == CLASSIFY_CNN_SVM)
 		createCNNFSVMPipeline();
 	else if (pars.cl == CLASSIFY_CNN_BOW)
-		createCNNBOWPipeline();
+		createExtractionPipeline();
 	else if (pars.cl == CLASSIFY_CNN_MULTIFTS)
 		createCNNMultiFts();
 
@@ -140,6 +140,15 @@ const QList<CaffeCnn *> CnnPipeline::getCurrentThreadCaffe(int priv)
 	}
 	QList<CaffeCnn *> list = threadData->cnns;
 	return list;
+}
+
+void CnnPipeline::createExtractionPipeline()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	p1->append(createEl(cnnExtract, 0));
+	p1->append(createEl(exportFeature, 0));
+	p1->end();
 }
 
 void CnnPipeline::createThreadData()
@@ -287,12 +296,17 @@ RawBuffer CnnPipeline::cnnExtract(const RawBuffer &buf, int priv)
 		return CVBuffer::createNewBuffer(merged, buf);
 	}
 
+
 	/* use single model */
 	CaffeCnn *c = list[pars.targetCaffeModel];
 	if (!c)
 		return buf;
 	if (featureLayer.contains("&"))
 		return CVBuffer::createNewBuffer(c->extractLinear(img, featureLayer.split("&")), buf);
+	if (pars.spatialSize == 0) {
+		const Mat &m = c->getLayerDimensions(featureLayer);
+		pars.spatialSize = m.at<float>(0, 0);
+	}
 	return CVBuffer::createNewBuffer(c->extractLinear(img, featureLayer), buf);
 }
 
@@ -363,6 +377,42 @@ RawBuffer CnnPipeline::cnnExtractMultiFts(const RawBuffer &buf, int priv)
 	else if (pars.featureMergingMethod == 2) //max pooling
 		return CVBuffer::createNewBuffer(OpenCV::merge(fts, OpenCV::MM_MAX), buf);
 	return CVBuffer::createNewBuffer(fts, buf);
+}
+
+RawBuffer CnnPipeline::exportFeature(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	const Mat &desc = cbuf->getReferenceMat();
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	QString fname = getExportFilename(imname, "bin");
+	assert(pars.spatialSize);
+	int fsize = desc.cols / pars.spatialSize / pars.spatialSize;
+	Mat fts(pars.spatialSize * pars.spatialSize, fsize, CV_32F);
+	const float *bdata = (const float *)desc.data;
+	for (int i = 0; i < desc.cols; i++) {
+		int row = i % fts.rows;
+		int col = i / fts.rows;
+		fts.at<float>(row, col) = bdata[i];
+	}
+	OpenCV::exportMatrix(fname, fts);
+
+	vector<KeyPoint> keypoints;
+	for (int i = 0; i < pars.spatialSize; i++) {
+		for (int j = 0; j < pars.spatialSize; j++) {
+			KeyPoint kpt;
+			int step = 1;//.cols / pars.spatialSize;
+			kpt.pt.x = j * step;
+			kpt.pt.y = i * step;
+			keypoints.push_back(kpt);
+		}
+	}
+	OpenCV::exportKeyPoints(fname.replace(".bin", ".kpts"), keypoints);
+
+	return buf;
 }
 
 RawBuffer CnnPipeline::createMulti(const RawBuffer &buf, int priv)

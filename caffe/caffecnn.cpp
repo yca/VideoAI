@@ -528,6 +528,17 @@ void CaffeCnn::printLayerInfo()
 	}
 }
 
+Mat CaffeCnn::getLayerDimensions(const QString &layer)
+{
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layer.toStdString());
+	Mat m(1, 4, CV_32F);
+	m.at<float>(0, 0) = blob->width();
+	m.at<float>(0, 1) = blob->height();
+	m.at<float>(0, 2) = blob->channels();
+	m.at<float>(0, 3) = blob->num();
+	return m;
+}
+
 void CaffeCnn::printLayerInfo(const QStringList &layers)
 {
 	foreach (const QString &layer, layers) {

@@ -32,6 +32,49 @@ static Mat getBow(const Mat &ids, int cols)
 	return py / OpenCV::getL1Norm(py);
 }
 
+static Mat getBow(const Mat &ids, int cols, const Mat &ids2, const Mat &corr)
+{
+	Mat py = Mat::zeros(1, cols, CV_32F);
+	for (int j = 0; j < ids.rows; j++) {
+		uint id1 = ids.at<uint>(j);
+		py.at<float>(id1) += 1;
+
+		uint id2 = ids2.at<uint>(j);
+		Mat c = corr.col(id2);
+		c /= OpenCV::getL1Norm(c);
+
+#if 0
+		Mat mask = Mat::ones(c.rows, c.cols, CV_8U);
+		Point minl; Point maxl;
+		double min, max;
+		minMaxLoc(c, &min, &max, &minl, &maxl, mask);
+		int cw1 = maxl.y;
+		float ccw1 = max;
+
+		mask.at<uchar>(maxl.y) = 0;
+		minMaxLoc(c, &min, &max, &minl, &maxl, mask);
+		int cw2 = maxl.y;
+		float ccw2 = max;
+
+		py.at<float>(cw1) += (ccw1) / (ccw1 + ccw2);
+		py.at<float>(cw2) += (ccw2) / (ccw1 + ccw2);
+
+		//for (int i = 0; i < cols; i++)
+			//py.at<float>(i) += c.at<float>(i);
+#else
+		double min, max;
+		Point minl; Point maxl;
+		minMaxLoc(c, &min, &max, &minl, &maxl);
+		py.at<float>(maxl.y) += 0.9;
+		/*Mat ct;
+		transpose(c, ct);
+		py += ct;*/
+		//qDebug() << id1 << id2 << c.at<float>(id1);
+#endif
+	}
+	return py / OpenCV::getL1Norm(py);
+}
+
 static int histCount(int L)
 {
 	int binCount = 0;
@@ -70,41 +113,25 @@ void BowPipeline::createPipeline()
 		createDictPipeline();
 	else if (pars.cl == CLASSIFY_BOW)
 		createBOWPipeline();
+	else if (pars.cl == CLASSIFY_BOW_CORR)
+		createCorrPipeline();
 
 	if (!pars.createDict) {
 		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
 		dict = OpenCV::importMatrix(fname);
+		mDebug("dict size: %dx%d", dict.rows, dict.cols);
 		for (int i = 0; i < pars.threads; i++) {
 			BowThreadData *data = threadsData[i];
 			data->py = new Pyramids;
 			data->py->setDict(dict);
 			data->map =  vl_homogeneouskernelmap_new(VlHomogeneousKernelChi2, pars.gamma, 1, -1, VlHomogeneousKernelMapWindowRectangular);
 		}
-
-#if 0
-		trainFile = new QFile(QString("%1/svm_train_ftype%2_K%3_step%4_L%5_gamma%6.txt")
-							  .arg(pars.dataPath)
-							  .arg(pars.ft)
-							  .arg(pars.K)
-							  .arg(pars.xStep)
-							  .arg(pars.L)
-							  .arg(pars.gamma)
-							  );
-
-		testFile = new QFile(QString("%1/svm_test_ftype%2_K%3_step%4_L%5_gamma%6.txt")
-							 .arg(pars.dataPath)
-							 .arg(pars.ft)
-							 .arg(pars.K)
-							 .arg(pars.xStep)
-							 .arg(pars.L)
-							 .arg(pars.gamma)
-							 );
-		testFile->open(QIODevice::WriteOnly);
-#else
 		initSvmFiles();
-#endif
 	}
 	initTrainTest();
+
+	//if (pars.cl == CLASSIFY_BOW_CORR)
+	corrData.confHash = OpenCV::importMatrix(QString("%1/confmat%2.bin").arg(pars.dataPath).arg(3));
 }
 
 void BowPipeline::createDictPipeline()
@@ -138,6 +165,14 @@ void BowPipeline::createBOWPipeline()
 		join1 << p1->getPipe(p1->getPipeCount() - 1);
 	}
 	p1->appendJoin(createEl(exportForSvm, 0), join1);
+	p1->end();
+}
+
+void BowPipeline::createCorrPipeline()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	p1->append(createEl(calcCorr, 0));
 	p1->end();
 }
 
@@ -193,8 +228,77 @@ RawBuffer BowPipeline::createImageDescriptor(const RawBuffer &buf, int priv)
 
 	int imW = buf.constPars()->videoWidth;
 	int imH = buf.constPars()->videoHeight;
-	const Mat &pyr = Pyramids::makeSpmFromIds(ids, pars.L, imW, imH, kpts, pars.K);
+	const Mat &pyr = Pyramids::makeSpmFromIds(ids, pars.L, imW, imH, kpts, dict.rows);
 	return CVBuffer::createNewBuffer(pyr, buf);
+}
+
+RawBuffer BowPipeline::createImageDescriptor2(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	const Mat &ids = cbuf->getReferenceMat();
+
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	//QString fname2 = getExportFilename(imname, "ids").replace("ftype0", "ftype1");
+	QString fname2 = getExportFilename(imname, "ids").replace("K1000", "K1001");
+	Mat ids1 = OpenCV::importMatrix(fname2);
+
+	if (pars.L == 0)
+		return CVBuffer::createNewBuffer(getBow(ids, dict.rows, ids1, corrData.confHash), buf);
+
+	QString fname = getExportFilename(imname, "kpts");
+	vector<KeyPoint> kpts = OpenCV::importKeyPoints(fname);
+
+	int imW = buf.constPars()->videoWidth;
+	int imH = buf.constPars()->videoHeight;
+	const Mat &pyr = Pyramids::makeSpmFromIds(ids, pars.L, imW, imH, kpts, dict.rows, ids1, corrData.confHash);
+	//const Mat &pyr = Pyramids::makeSpmFromIds(ids, pars.L, imW, imH, kpts, pars.K);
+	return CVBuffer::createNewBuffer(pyr, buf);
+}
+
+RawBuffer BowPipeline::calcCorr(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(buf);
+
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	QString fname = getExportFilename(imname, "ids");
+	QString fname2;
+	Mat ids0, ids1;
+#if 1
+	if (fname.contains("ftype101")) {
+		fname2 = getExportFilename(imname, "ids").replace("ftype1", "ftype0");
+		ids1 = OpenCV::importMatrix(fname);
+		ids0 = OpenCV::importMatrix(fname2);
+	} else {
+		fname2 = getExportFilename(imname, "ids").replace("ftype100", "ftype101");
+		ids0 = OpenCV::importMatrix(fname);
+		ids1 = OpenCV::importMatrix(fname2);
+	}
+#else
+	fname2 = getExportFilename(imname, "ids").replace("K1000", "K1001");
+	ids0 = OpenCV::importMatrix(fname);
+	ids1 = OpenCV::importMatrix(fname2);
+#endif
+
+
+	int bins = ids0.rows;
+	CV_Assert(ids0.rows == ids1.rows);
+	if (corrData.confHash.rows == 0)
+		corrData.confHash = Mat::zeros(993, 993, CV_32F);
+	for (int i = 0; i < bins; ++i) {
+		int d1 = ids0.at<int>(i, 0);
+		int d2 = ids1.at<int>(i, 0);
+
+		/* corr matrix */
+		double min, max;
+		corrData.confHash.at<float>(d1, d2)++;
+		Point minl; Point maxl;
+		minMaxLoc(corrData.confHash.row(d1), &min, &max, &minl, &maxl);
+	}
+	return buf;
 }
 
 void BowPipeline::pipelineFinished()
@@ -233,7 +337,8 @@ void BowPipeline::pipelineFinished()
 				OpenCV::exportMatrix(fname, dict);
 			}
 		}
-	}
+	} else if (pars.cl == CLASSIFY_BOW_CORR)
+		OpenCV::exportMatrix(QString("%1/confmat%2.bin").arg(pars.dataPath).arg(pars.runId), corrData.confHash);
 
 	ClassificationPipeline::pipelineFinished();
 }
@@ -324,32 +429,16 @@ std::vector<KeyPoint> BowPipeline::extractKeypoints(const Mat &m)
 	} else if (pars.ft == FEAT_SURF) {
 		SurfFeatureDetector dec;
 		dec.detect(m, keypoints);
-	} else if (pars.ft == FEAT_CNN) {
-		for (int i = 0; i < 55; i++) {
-			for (int j = 0; j < 55; j++) {
-				KeyPoint kpt;
-				kpt.pt.x = j * 4;
-				kpt.pt.y = i * 4;
-				keypoints.push_back(kpt);
-			}
-		}
-	}
+	} else
+		assert(0);
 	return keypoints;
 }
 
 std::vector<KeyPoint> BowPipeline::extractDenseKeypoints(const Mat &m, int step)
 {
 	vector<KeyPoint> keypoints;
-	if (pars.ft == FEAT_CNN) {
-		for (int i = 0; i < pars.spatialSize; i++) {
-			for (int j = 0; j < pars.spatialSize; j++) {
-				KeyPoint kpt;
-				int step = m.cols / pars.spatialSize;
-				kpt.pt.x = j * step;
-				kpt.pt.y = i * step;
-				keypoints.push_back(kpt);
-			}
-		}
+	if (pars.ft >= FEAT_CNN) {
+		assert(0);
 	} else {
 		DenseFeatureDetector dec(11.f, 1, 0.1f, step, 0);
 		dec.detect(m, keypoints);
@@ -366,11 +455,8 @@ Mat BowPipeline::computeFeatures(const Mat &m, std::vector<KeyPoint> &keypoints)
 	} else if (pars.ft == FEAT_SURF) {
 		SurfDescriptorExtractor ex;
 		ex.compute(m, keypoints, features);
-	} /*else if (pars.ft == FEAT_CNN) {
-		const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
-		QString featureLayer = pars.cnnFeatureLayer;
-		return list[0]->extract(m, featureLayer);
-	}*/
+	} else
+		assert(0);
 	return features;
 }
 
@@ -403,10 +489,9 @@ void BowPipeline::createThreadData()
 
 int BowPipeline::checkParameters()
 {
-	assert(pars.createDict || pars.cl == CLASSIFY_BOW);
+	assert(pars.createDict || pars.cl == CLASSIFY_BOW || pars.cl == CLASSIFY_BOW_CORR);
 	assert(pars.threads);
 	assert(pars.K);
-	assert(pars.ft == FEAT_SIFT || pars.ft == FEAT_SURF);
 	return 0;
 }
 
@@ -415,6 +500,8 @@ QString BowPipeline::getExportFilename(const QString &imname, const QString &suf
 	QFileInfo fi(imname);
 	if (suffix == "ids")
 		return QString("%1/%2_ftype%3_s%5_K%6.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.ft).arg(suffix).arg(pars.xStep).arg(pars.K);
-	return QString("%1/%2_ftype%3_s%5.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.ft).arg(suffix).arg(pars.xStep);
+	if (pars.ft < FEAT_CNN)
+		return QString("%1/%2_ftype%3_s%5.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.ft).arg(suffix).arg(pars.xStep);
+	return QString("%1/%2_ftype%3.%4").arg(fi.absolutePath()).arg(fi.baseName()).arg(pars.ft).arg(suffix);
 }
 

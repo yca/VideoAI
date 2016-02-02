@@ -17,6 +17,7 @@ public:
 	RawBuffer createMulti(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnExtract(const RawBuffer &buf, int priv);
 	virtual RawBuffer cnnExtractMultiFts(const RawBuffer &buf, int priv);
+	virtual RawBuffer exportFeature(const RawBuffer &buf, int priv);
 signals:
 
 public slots:
@@ -28,6 +29,7 @@ protected:
 
 	const QList<CaffeCnn *> getCurrentThreadCaffe(int priv);
 
+	void createExtractionPipeline();
 	void createCNNFC7Pipeline();
 	void createCNNFSVMPipeline();
 	void createCNNBOWPipeline();

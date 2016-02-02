@@ -23,6 +23,7 @@ public slots:
 	static Mat computeFeatures(const Mat &m, vector<KeyPoint> &keypoints);
 	static Mat clusterFeatures(const Mat &features, int clusterCount);
 	static Mat makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int K);
+	static Mat makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int K, const Mat &ids2, const Mat &corr);
 
 	void createDictionary(const QStringList &images, int clusterCount);
 	void createDictionary(int clusterCount);
