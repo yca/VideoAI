@@ -38,6 +38,7 @@ public slots:
 	Mat makeSpmFromMat(const Mat &im, int L, int step = -1);
 	Mat makeSpmFromMatH(const Mat &im, int L, int H, int step = -1);
 	Mat makeHistImage(const Mat &hist, int scale = 0, int foreColor = Qt::white, int backColor = Qt::black);
+	Mat makeVladSpm(const Mat &fts, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int knn, int flags);
 	void setDict(const QString &filename);
 	void setDict(const Mat &codewords);
 	Mat getDict();

@@ -117,6 +117,84 @@ Mat Pyramids::clusterFeatures(const Mat &features, int clusterCount)
 	return centers.rowRange(Range(0, ccnt));
 }
 
+Mat Pyramids::makeVladSpm(const Mat &fts, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int knn, int flags)
+{
+#if 0
+	vector<vector<DMatch> > ids = matchFeatures(fts, 5);
+	Mat linear = Mat::zeros(1, dict.rows * dict.cols, CV_32F);
+	Mat residuals = Mat(dict.rows, dict.cols, CV_32F, linear.data);
+	for (int i = 0; i < fts.rows; i++) {
+		const Mat ft = fts.row(i);
+		const vector<DMatch> m = ids[i];
+		for (uint k = 0; k < m.size(); k++) {
+			int row = m[k].trainIdx;
+			residuals.row(row) += (ft - dict.row(row));
+		}
+	}
+
+	/* intra normalize residuals */
+	for (int i = 0; i < residuals.rows; i++) {
+		float n = OpenCV::getL2Norm(residuals.row(i));
+		if (n > 0)
+			residuals.row(i) /= n;
+	}
+
+	linear /= OpenCV::getL2Norm(linear);
+	return linear;
+#else
+	int binCount = histCount(L);
+	vector<vector<DMatch> > ids = matchFeatures(fts, knn);
+	Mat linear = Mat::zeros(1, dict.rows * dict.cols * binCount, CV_32F);
+	Mat residuals = Mat(dict.rows * binCount, dict.cols, CV_32F, linear.data);
+	for (uint i = 0; i < ids.size(); i++) {
+		const Mat ft = fts.row(i);
+		const KeyPoint kpt = keypoints.at(i);
+		Mat cont = findPointContributions(kpt.pt.x, kpt.pt.y, L, imW, imH);
+		const vector<DMatch> m = ids[i];
+
+		for (int j = 0; j < cont.rows; j++) {
+			int ct = cont.at<float>(j);
+
+			for (uint k = 0; k < m.size(); k++) {
+				int row = m[k].trainIdx;
+				int row2 = row + ct * dict.rows;
+				Mat r = ft - dict.row(row);
+				if (flags & 0x02)
+					r /= OpenCV::getL2Norm(r);
+				if (flags & 0x04)
+					r /= OpenCV::getL1Norm(r);
+				residuals.row(row2) += r;
+			}
+		}
+	}
+
+	if (flags & 0x01) {
+		/* intra normalize residuals */
+		for (int i = 0; i < residuals.rows; i++) {
+			float n = OpenCV::getL2Norm(residuals.row(i));
+			if (n > 0)
+				residuals.row(i) /= n;
+		}
+	}
+
+	if (flags & 0x08) {
+		/* power normalize */
+		for (int i = 0; i < residuals.rows; i++) {
+			for (int j = 0; j < residuals.cols; j++) {
+				float num = residuals.at<float>(i, j);
+				if (num >= 0)
+					residuals.at<float>(i, j) = sqrt(num);
+				else
+					residuals.at<float>(i, j) = sqrt(-num);
+			}
+		}
+	}
+
+	linear /= OpenCV::getL2Norm(linear);
+	return linear;
+#endif
+}
+
 Mat Pyramids::makeSpmFromIds(const Mat &ids, int L, int imW, int imH, const vector<KeyPoint> &keypoints, int K)
 {
 	int binCount = histCount(L);
