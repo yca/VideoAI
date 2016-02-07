@@ -39,6 +39,7 @@ SOURCES += main.cpp \
     lmm/buffercloner.cpp \
     lmm/bowpipeline.cpp \
     lmm/cnnpipeline.cpp \
+    lmm/pipelinesettings.cpp
 
 HEADERS  += \
     scripting/scriptedit.h \
@@ -65,6 +66,7 @@ HEADERS  += \
     lmm/bowpipeline.h \
     lmm/cnnpipeline.h \
     lmm/lmmelements.h \
+    lmm/pipelinesettings.h
 
 RESOURCES += \
     scripting/images.qrc
