@@ -4,6 +4,7 @@
 #include "vision/pyramids.h"
 #include "vlfeat/vlfeat.h"
 #include "common.h"
+#include "pipelinesettings.h"
 
 #include <lmm/debug.h>
 #include <lmm/baselmmpipeline.h>
@@ -109,10 +110,14 @@ BowPipeline::BowPipeline(const ClassificationPipeline::parameters &params, QObje
 
 void BowPipeline::createPipeline()
 {
-	if (pars.createDict)
+	if (pars.createDict && ps->get("features.lib") == "vlfeat")
+		createDictPipelineVlFeat();
+	else if (pars.createDict)
 		createDictPipeline();
-	else if (pars.cl == CLASSIFY_BOW)
+	else if (pars.cl == CLASSIFY_BOW && ps->get("features.lib") == "opencv")
 		createBOWPipeline();
+	else if (pars.cl == CLASSIFY_BOW && ps->get("features.lib") == "vlfeat")
+		createBOWPipelineVlFeat();
 	else if (pars.cl == CLASSIFY_BOW_CORR)
 		createCorrPipeline();
 
@@ -149,6 +154,20 @@ void BowPipeline::createDictPipeline()
 	p1->end(join1);
 }
 
+void BowPipeline::createDictPipelineVlFeat()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	BaseLmmElement *node1 = p1->getPipe(p1->getPipeCount() - 1);
+	QList<BaseLmmElement *> join1;
+	for (int i = 0; i < pars.threads; i++) {
+		p1->insert(node1, createEl(vlDenseSift, i));
+		p1->append(createEl(addToDictPool, i));
+		join1 << p1->getPipe(p1->getPipeCount() - 1);
+	}
+	p1->end(join1);
+}
+
 void BowPipeline::createBOWPipeline()
 {
 	BaseLmmPipeline *p1 = addPipeline();
@@ -160,6 +179,29 @@ void BowPipeline::createBOWPipeline()
 		p1->append(createEl(extractFeatures, i));
 		p1->append(createEl(createIDs, i));
 		p1->append(createEl(createImageDescriptor, i));
+		if (pars.homkermap)
+			p1->append(createEl(mapDescriptor, i));
+		join1 << p1->getPipe(p1->getPipeCount() - 1);
+	}
+	p1->appendJoin(createEl(exportForSvm, 0), join1);
+	p1->end();
+}
+
+void BowPipeline::createBOWPipelineVlFeat()
+{
+	BaseLmmPipeline *p1 = addPipeline();
+	p1->append(createEl2(readNextImage));
+	BaseLmmElement *node1 = p1->getPipe(p1->getPipeCount() - 1);
+	QList<BaseLmmElement *> join1;
+	for (int i = 0; i < pars.threads; i++) {
+		p1->insert(node1, createEl(vlDenseSift, i));
+		if (ps->get("encoding.type") == "vq") {
+			p1->append(createEl(createIDs, i));
+			p1->append(createEl(createImageDescriptor, i));
+		} else if (ps->get("encoding.type") == "vlad") {
+			p1->append(createEl(createImageVladDescriptor, i));
+		} else
+			assert(0);
 		if (pars.homkermap)
 			p1->append(createEl(mapDescriptor, i));
 		join1 << p1->getPipe(p1->getPipeCount() - 1);
@@ -259,6 +301,33 @@ RawBuffer BowPipeline::createImageDescriptor2(const RawBuffer &buf, int priv)
 	return CVBuffer::createNewBuffer(pyr, buf);
 }
 
+RawBuffer BowPipeline::createImageVladDescriptor(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	tdlock.lock();
+	Pyramids *py = NULL;
+	if (priv < threadsData.size())
+		py = threadsData[priv]->py;
+	tdlock.unlock();
+	if (!py)
+		return buf;
+
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	QString kname = getExportFilename(imname, "kpts");
+	vector<KeyPoint> kpts = OpenCV::importKeyPoints(kname);
+	const Mat &fts = cbuf->getReferenceMat();
+	int imW = buf.constPars()->videoWidth;
+	int imH = buf.constPars()->videoHeight;
+	Mat linear = py->makeVladSpm(fts, pars.L, imW, imH, kpts, ps->get("encoding.vlad.knn_count").toInt(),
+								 ps->get("encoding.vlad.flags").toInt());
+
+	return CVBuffer::createNewBuffer(linear, buf);
+}
+
 RawBuffer BowPipeline::calcCorr(const RawBuffer &buf, int priv)
 {
 	Q_UNUSED(buf);
@@ -299,6 +368,102 @@ RawBuffer BowPipeline::calcCorr(const RawBuffer &buf, int priv)
 		minMaxLoc(corrData.confHash.row(d1), &min, &max, &minl, &maxl);
 	}
 	return buf;
+}
+
+RawBuffer BowPipeline::vlDenseSift(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	if (buf.getMimeType() != "application/cv-mat")
+		return RawBuffer();
+
+	CVBuffer *cbuf = (CVBuffer *)&buf;
+	Mat mat = cbuf->getReferenceMat();
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	QString kname = getExportFilename(imname, "kpts");
+	QString fname = getExportFilename(imname, "bin");
+
+	vector<KeyPoint> kpts2;
+	Mat features;
+
+	/* use existing ones if exists */
+	if (pars.useExisting && QFile::exists(kname)) {
+		kpts2 = OpenCV::importKeyPoints(kname);
+		features = OpenCV::importMatrix(fname);
+	} else {
+		vector<float> img;
+		for (int i = 0; i < mat.rows; ++i)
+			for (int j = 0; j < mat.cols; ++j)
+				img.push_back(mat.at<unsigned char>(i, j));
+
+#if 0
+		VlDsiftFilter *dsift = vl_dsift_new_basic(mat.cols, mat.rows, pars.xStep, 16);
+		vl_dsift_set_flat_window(dsift, true);
+		vl_dsift_process(dsift, &img[0]);
+		const float *desc = vl_dsift_get_descriptors(dsift);
+		const VlDsiftKeypoint *kpts = vl_dsift_get_keypoints(dsift);
+		int cnt = vl_dsift_get_keypoint_num(dsift);
+
+		features = Mat(cnt, vl_dsift_get_descriptor_size(dsift), CV_32F);
+		for (int i = 0; i < cnt; i++) {
+			KeyPoint pt;
+			pt.pt.x = kpts[i].x;
+			pt.pt.y = kpts[i].y;
+			kpts2.push_back(pt);
+			for (int j = 0; j < features.cols; j++)
+				features.at<float>(i, j) = qMin(desc[i * features.cols + j] * 512.0, 255.0);
+		}
+		vl_dsift_delete(dsift);
+#else
+		VlDsiftFilter *dsift = vl_dsift_new_basic(mat.cols, mat.rows, pars.xStep, 16);
+		vl_dsift_set_flat_window(dsift, true);
+		features = Mat(0, vl_dsift_get_descriptor_size(dsift), CV_32F);
+
+		QStringList l = ps->get("features.step_sizes").toString().split(",");
+		QList<int> binSizes;
+		foreach (QString s, l)
+			binSizes << s.toInt();
+		QList<double> scales;
+		double magnif = 3;
+		for (int i = 0; i < binSizes.size(); i++)
+			scales << binSizes[i] / magnif;
+		for (int i = 0; i < binSizes.size(); i++) {
+			double sigma = sqrt(pow(scales[i], 2) - 0.25);
+			//smooth float array image
+			float* img_vec_smooth = (float*)malloc(mat.rows * mat.cols * sizeof(float));
+			vl_imsmooth_f(img_vec_smooth, mat.cols, &img[0], mat.cols, mat.rows, mat.cols, sigma, sigma);
+			vl_dsift_process(dsift, img_vec_smooth);
+
+			const float *desc = vl_dsift_get_descriptors(dsift);
+			const VlDsiftKeypoint *kpts = vl_dsift_get_keypoints(dsift);
+			int cnt = vl_dsift_get_keypoint_num(dsift);
+
+			Mat fts = Mat(cnt, vl_dsift_get_descriptor_size(dsift), CV_32F);
+			for (int k = 0; k < cnt; k++) {
+				KeyPoint pt;
+				pt.pt.x = kpts[k].x;
+				pt.pt.y = kpts[k].y;
+				kpts2.push_back(pt);
+				for (int j = 0; j < fts.cols; j++)
+					fts.at<float>(k, j) = qMin(desc[k * fts.cols + j] * 512.0, 255.0);
+				if (ps->isEqual("features.vlfeat.sift.normalization", "l2"))
+					fts.row(k) /= OpenCV::getL2Norm(fts.row(k));
+				else if (ps->isEqual("features.vlfeat.sift.normalization", "l1"))
+					fts.row(k) /= OpenCV::getL1Norm(fts.row(k));
+			}
+			features.push_back(fts);
+			free(img_vec_smooth);
+		}
+
+		vl_dsift_delete(dsift);
+#endif
+
+		OpenCV::exportKeyPoints(kname, kpts2);
+		if (pars.exportData)
+			OpenCV::exportMatrix(fname, features);
+	}
+
+	assert(features.rows);
+	return CVBuffer::createNewBuffer(features, buf);
 }
 
 void BowPipeline::pipelineFinished()

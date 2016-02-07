@@ -18,7 +18,9 @@ public:
 	virtual RawBuffer createIDs(const RawBuffer &buf, int priv);
 	virtual RawBuffer createImageDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer createImageDescriptor2(const RawBuffer &buf, int priv);
+	virtual RawBuffer createImageVladDescriptor(const RawBuffer &buf, int priv);
 	virtual RawBuffer calcCorr(const RawBuffer &buf, int priv);
+	virtual RawBuffer vlDenseSift(const RawBuffer &buf, int priv);
 
 signals:
 
@@ -31,7 +33,9 @@ protected:
 	virtual QString getExportFilename(const QString &imname, const QString &suffix);
 
 	void createDictPipeline();
+	void createDictPipelineVlFeat();
 	void createBOWPipeline();
+	void createBOWPipelineVlFeat();
 	void createCorrPipeline();
 	std::vector<cv::KeyPoint> extractDenseKeypoints(const cv::Mat &m, int step);
 	std::vector<cv::KeyPoint> extractKeypoints(const cv::Mat &m);
