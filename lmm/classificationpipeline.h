@@ -19,6 +19,7 @@
 
 class QFile;
 class DatasetManager;
+class PipelineSettings;
 
 //#define objstr(_x, _id) QString("%1%2").arg(cl##_x).arg(_id)
 
@@ -29,6 +30,7 @@ public:
 	enum ftype {
 		FEAT_SIFT,
 		FEAT_SURF,
+		FEAT_DSIFT,
 		FEAT_CNN = 100,
 	};
 	enum cltype {
@@ -108,7 +110,7 @@ public:
 
 	explicit ClassificationPipeline(QObject *parent = 0);
 	explicit ClassificationPipeline(const struct parameters &params, QObject *parent = 0);
-	void init();
+	void init(PipelineSettings *s);
 
 	/* buffer operations */
 	virtual const RawBuffer readNextImage();
@@ -131,6 +133,7 @@ protected:
 
 	void augmentTrainData(QList<TrainInfo *> &trainInfo, TrainInfo *info, int dataAug);
 	void createTrainTestSplit(const QString &trainSetFileName);
+	void compatSettings();
 
 	virtual int pipelineOutput(BaseLmmPipeline *, const RawBuffer &buf);
 
@@ -148,6 +151,7 @@ protected:
 	int expectedFrameCount;
 	QList<QFile *> trainFilesMulti;
 	QList<QFile *> testFilesMulti;
+	PipelineSettings *ps;
 
 	QMutex tdlock;
 	QList<TrainInfo *> trainInfo;

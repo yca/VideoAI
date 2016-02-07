@@ -51,3 +51,10 @@ Valid Parameters:
         featureMergingMethod : 0 means concatanation, 1 means sum pooling, 2 means max pooling.
         cnnFeatureLayerType : Do not use.
 
+New parameters:
+
+features.step_sizes
+features.lib
+features.vlfeat.sift.normalization
+encoding.vlad.knn_count
+encoding.vlad.flags

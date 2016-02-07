@@ -143,6 +143,8 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 				flds[1] = "0";
 			if (flds[1] == "FEAT_SURF")
 				flds[1] = "1";
+			if (flds[1] == "FEAT_DSIFT")
+				flds[1] = "2";
 			if (flds[1] == "FEAT_CNN")
 				flds[1] = "2";
 			setAllPars();
@@ -168,7 +170,7 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 			pl = new CnnPipeline(pars);
 	} else
 		pl = new BowPipeline;
-	pl->init();
+	pl->init(PipelineSettings::getInstance());
 	pl->start();
 	return a.exec();
 }

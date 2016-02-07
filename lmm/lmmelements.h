@@ -21,7 +21,7 @@ public:
 		RawBuffer buf2 = (enc->*mfunc)(buf, priv);
 		if (buf.getMimeType() == "application/empty")
 			return 0;
-		if (getOutputQueue(0)->getBufferCount() > 500)
+		while (getOutputQueue(0)->getBufferCount() > 500)
 			usleep(1000 * 100);
 		return newOutputBuffer(0, buf2);
 	}
@@ -50,7 +50,7 @@ public:
 		RawBuffer buf = (enc->*mfunc)();
 		if (buf.getMimeType() == "application/empty")
 			return 0;
-		if (getOutputQueue(0)->getBufferCount() > 500)
+		while (getOutputQueue(0)->getBufferCount() > 500)
 			usleep(1000 * 100);
 		return newOutputBuffer(ch, buf);
 	}

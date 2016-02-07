@@ -6,6 +6,7 @@
 #include "common.h"
 #include "caffe/caffecnn.h"
 #include "buffercloner.h"
+#include "pipelinesettings.h"
 
 #include <lmm/debug.h>
 #include <lmm/baselmmpipeline.h>
@@ -309,8 +310,11 @@ void ClassificationPipeline::pipelineFinished()
 	QApplication::exit();
 }
 
-void ClassificationPipeline::init()
+void ClassificationPipeline::init(PipelineSettings *s)
 {
+	ps = s;
+	compatSettings();
+
 	checkParameters();
 
 	/* init thread branch data */
@@ -337,6 +341,8 @@ void ClassificationPipeline::init()
 			fsize = 128;
 		else if (pars.ft == FEAT_CNN)
 			fsize = 96;
+		else if (pars.ft == FEAT_DSIFT)
+			fsize = 128;
 		int dsize = fsize * 4;
 		pars.maxFeaturesPerImage = (double)(pars.maxMemBytes) / trainInfo.size() / dsize;
 		pars.dictSubSample = 0;
@@ -544,6 +550,55 @@ void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileNam
 	}
 	lines << "";
 	Common::exportText(lines.join("\n"), trainSetFileName);
+}
+
+void ClassificationPipeline::compatSettings()
+{
+	pars.ft = (ftype)ps->get("features.type").toInt();
+	pars.xStep = ps->get("features.x_step").toInt();
+	pars.yStep = ps->get("features.y_step").toInt();
+
+	pars.exportData = ps->get("data.export_generated").toBool();
+	pars.useExisting = ps->get("data.use_existing").toBool();
+	pars.dataPath = ps->get("data.path").toString();
+	pars.lmdbFeaturePath = ps->get("data.lmdb_feature_path").toString();
+	pars.datasetPath = ps->get("data.dataset.path").toString();
+	pars.datasetName = ps->get("data.dataset.name").toString();
+	pars.useExistingTrainSet = ps->get("data.split.use_existing").toBool();
+	pars.fileListTxt = ps->get("data.split.file_list").toString();
+	pars.trainListTxt = ps->get("data.split.train_list").toString();
+	pars.testListTxt = ps->get("data.split.test_list").toString();
+	pars.caffeBaseDir = ps->get("data.caffe.base_dir").toString();
+	pars.caffeDeployProto = ps->get("data.caffe.deploy_proto").toString();
+	pars.caffeModelFile = ps->get("data.caffe.weights_file").toString();
+	pars.caffeImageMeanProto = ps->get("data.caffe.image_mean").toString();
+	pars.imFlags = ps->get("data.image.flags").toInt();
+	pars.dataAug = ps->get("data.image.augmentation").toInt();
+	pars.rotationDegree = ps->get("data.rotationDegree").toInt();
+
+	pars.threads = ps->get("pipeline.thread_count").toInt();
+	pars.cl = (cltype)ps->get("pipeline.type").toInt();
+	pars.debug = ps->get("pipeline.debug").toInt();
+	pars.runId = ps->get("pipeline.run_id").toInt();
+
+	pars.K = ps->get("encoding.dict.size").toInt();
+	pars.dictSubSample = ps->get("encoding.dict.sub_sample").toInt();
+	pars.createDict = ps->get("pipeline.create_dict").toBool();
+
+	pars.gamma = ps->get("encoding.svm.gamma").toDouble();
+	pars.homkermap = ps->get("encoding.svm.homkermap").toBool();
+	pars.trainCount = ps->get("data.split.train_count").toInt();
+	pars.testCount = ps->get("data.split.test_count").toInt();
+	pars.L = ps->get("encoding.spm.level").toInt();
+
+	pars.maxMemBytes = ps->get("encoding.dict.max_mem_bytes").toLongLong();
+	pars.maxFeaturesPerImage = ps->get("encoding.dict.max_fts_image").toInt();
+
+	pars.cnnFeatureLayer = ps->get("cnn.feature_layer").toString();
+	pars.cnnFeatureLayerType = ps->get("cnn.feature_layer_type").toString();
+	pars.spatialSize = ps->get("cnn.spatial_size").toInt();
+	pars.targetCaffeModel = ps->get("cnn.caffe.target_model").toInt();
+	pars.featureMergingMethod = ps->get("cnn.feature_merging").toInt();
 }
 
 int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *p, const RawBuffer &buf)

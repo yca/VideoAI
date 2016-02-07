@@ -8,6 +8,8 @@
 
 extern "C" {
 #include <vl/homkermap.h>
+#include <vl/dsift.h>
+#include <vl/imopv.h>
 }
 
 using namespace cv;
