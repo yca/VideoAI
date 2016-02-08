@@ -58,6 +58,7 @@ public slots:
 	static Mat createRandomized(int start, int max, int size);
 	static bool matContains(const Mat &m, int val);
 	static QString toSvmLine(const Mat &spm, int label);
+	static Mat histIntersect(const Mat &m1, const Mat &m2);
 protected:
 	Mat refMat;
 };

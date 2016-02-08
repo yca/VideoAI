@@ -6,6 +6,7 @@
 #include "lmm/bowpipeline.h"
 #include "lmm/cnnpipeline.h"
 #include "lmm/classificationpipeline.h"
+#include "lmm/pipelinesettings.h"
 
 #include <QDir>
 #include <QDebug>
@@ -114,6 +115,7 @@ static void myMessageOutput(QtMsgType type, const QMessageLogContext &context, c
 	setParStr(cnnFeatureLayerType); \
 	setParInt(runId); \
 
+
 static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[])
 {
 	QApplication a(argc, argv);
@@ -121,6 +123,13 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 	ClassificationPipeline *pl;
 	if (args.contains("--conf")) {
 		assert(QFile::exists(args["--conf"]));
+		PipelineSettings::getInstance()->setBackendFile(args["--conf"]);
+		QString outputDir = PipelineSettings::getInstance()->get("data.path").toString();
+		int runId = PipelineSettings::getInstance()->get("pipeline.run_id").toInt();
+		QDir d(outputDir);
+		d.mkpath("info");
+		d = QDir(outputDir + "/info/");
+		QFile::copy(args["--conf"], d.filePath(QFileInfo(args["--conf"]).fileName()).append(QString(".%1").arg(runId)));
 		QStringList lines = Common::importText(args["--conf"]);
 		ClassificationPipeline::parameters pars;
 		foreach (QString line, lines) {
@@ -146,7 +155,7 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 			if (flds[1] == "FEAT_DSIFT")
 				flds[1] = "2";
 			if (flds[1] == "FEAT_CNN")
-				flds[1] = "2";
+				flds[1] = "100";
 			setAllPars();
 		}
 		/* check command line parameters */
@@ -160,6 +169,7 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 			flds << mi.value().trimmed();
 			setAllPars();
 		}
+		pars = ClassificationPipeline::compatSettings(PipelineSettings::getInstance());
 		if (pars.createDict || pars.cl == ClassificationPipeline::CLASSIFY_BOW)
 			pl = new BowPipeline(pars);
 		else if (pars.cl == ClassificationPipeline::CLASSIFY_BOW)
@@ -692,11 +702,11 @@ int main(int argc, char *argv[])
 	else if (args["__app__"].contains("latefusion"))
 		return lateFusionSvm(args);
 
-	CaffeCnn::printLayerInfo("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/net_surgery/VGG_ILSVRC_16_layers_deploy_s1.prototxt");
+	/*CaffeCnn::printLayerInfo("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/net_surgery/VGG_ILSVRC_16_layers_deploy_s1.prototxt");
 	return 0;
-	return diff2Svms();
+	return diff2Svms();*/
 
-	args.insert("--conf", "/home/amenmd/myfs/tasks/video_analysis/videoai_work/pipeline.conf.ucf101.tmp");
+	args.insert("--conf", "/tmp/pipeline.conf");
 	return pipelineImp(args, argc, argv);
 
 	//return cnnExtract();

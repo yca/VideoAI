@@ -158,12 +158,18 @@ Mat Pyramids::makeVladSpm(const Mat &fts, int L, int imW, int imH, const vector<
 			for (uint k = 0; k < m.size(); k++) {
 				int row = m[k].trainIdx;
 				int row2 = row + ct * dict.rows;
-				Mat r = ft - dict.row(row);
-				if (flags & 0x02)
-					r /= OpenCV::getL2Norm(r);
-				if (flags & 0x04)
-					r /= OpenCV::getL1Norm(r);
-				residuals.row(row2) += r;
+				if (1) {
+					/* L1 distance */
+					Mat r = ft - dict.row(row);
+					if (flags & 0x02)
+						r /= OpenCV::getL2Norm(r);
+					if (flags & 0x04)
+						r /= OpenCV::getL1Norm(r);
+					residuals.row(row2) += r;
+				} else {
+					Mat r = OpenCV::histIntersect(ft, dict.row(row));
+					residuals.row(row2) = OpenCV::histIntersect(residuals.row(row2), r);
+				}
 			}
 		}
 	}

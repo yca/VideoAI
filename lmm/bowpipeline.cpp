@@ -124,6 +124,12 @@ void BowPipeline::createPipeline()
 	if (!pars.createDict) {
 		QString fname = QString("%1/dict_ftype%3_K%2.bin").arg(pars.dataPath).arg(pars.K).arg(pars.ft);
 		dict = OpenCV::importMatrix(fname);
+		for (int i = 0; i < dict.rows; i++) {
+			if (ps->isEqual("features.vlfeat.sift.normalization", "l2"))
+				dict.row(i) /= OpenCV::getL2Norm(dict.row(i));
+			else if (ps->isEqual("features.vlfeat.sift.normalization", "l1"))
+				dict.row(i) /= OpenCV::getL1Norm(dict.row(i));
+		}
 		mDebug("dict size: %dx%d", dict.rows, dict.cols);
 		for (int i = 0; i < pars.threads; i++) {
 			BowThreadData *data = threadsData[i];
@@ -395,7 +401,7 @@ RawBuffer BowPipeline::vlDenseSift(const RawBuffer &buf, int priv)
 			for (int j = 0; j < mat.cols; ++j)
 				img.push_back(mat.at<unsigned char>(i, j));
 
-#if 0
+#if 1
 		VlDsiftFilter *dsift = vl_dsift_new_basic(mat.cols, mat.rows, pars.xStep, 16);
 		vl_dsift_set_flat_window(dsift, true);
 		vl_dsift_process(dsift, &img[0]);
@@ -411,14 +417,18 @@ RawBuffer BowPipeline::vlDenseSift(const RawBuffer &buf, int priv)
 			kpts2.push_back(pt);
 			for (int j = 0; j < features.cols; j++)
 				features.at<float>(i, j) = qMin(desc[i * features.cols + j] * 512.0, 255.0);
+			int norm = 0;
+			if (ps->isEqual("features.vlfeat.sift.normalization", "l2"))
+				norm = OpenCV::getL2Norm(features.row(i));
+			else if (ps->isEqual("features.vlfeat.sift.normalization", "l1"))
+				norm =  OpenCV::getL1Norm(features.row(i));
+			if (norm > 0)
+				features.row(i) /= norm;
 		}
 		vl_dsift_delete(dsift);
 #else
-		VlDsiftFilter *dsift = vl_dsift_new_basic(mat.cols, mat.rows, pars.xStep, 16);
-		vl_dsift_set_flat_window(dsift, true);
-		features = Mat(0, vl_dsift_get_descriptor_size(dsift), CV_32F);
-
-		QStringList l = ps->get("features.step_sizes").toString().split(",");
+		/* create bin sizes(steps) and scales */
+		QStringList l = ps->get("features.bin_sizes").toString().split(",");
 		QList<int> binSizes;
 		foreach (QString s, l)
 			binSizes << s.toInt();
@@ -426,7 +436,14 @@ RawBuffer BowPipeline::vlDenseSift(const RawBuffer &buf, int priv)
 		double magnif = 3;
 		for (int i = 0; i < binSizes.size(); i++)
 			scales << binSizes[i] / magnif;
+
+		/* extract dense features at multiple scales */
 		for (int i = 0; i < binSizes.size(); i++) {
+			VlDsiftFilter *dsift = vl_dsift_new_basic(mat.cols, mat.rows, pars.xStep, binSizes[i]);
+			vl_dsift_set_flat_window(dsift, true);
+			if (i == 0)
+				features = Mat(0, vl_dsift_get_descriptor_size(dsift), CV_32F);
+
 			double sigma = sqrt(pow(scales[i], 2) - 0.25);
 			//smooth float array image
 			float* img_vec_smooth = (float*)malloc(mat.rows * mat.cols * sizeof(float));
@@ -445,16 +462,19 @@ RawBuffer BowPipeline::vlDenseSift(const RawBuffer &buf, int priv)
 				kpts2.push_back(pt);
 				for (int j = 0; j < fts.cols; j++)
 					fts.at<float>(k, j) = qMin(desc[k * fts.cols + j] * 512.0, 255.0);
+				int norm = 0;
 				if (ps->isEqual("features.vlfeat.sift.normalization", "l2"))
-					fts.row(k) /= OpenCV::getL2Norm(fts.row(k));
+					norm = OpenCV::getL2Norm(fts.row(k));
 				else if (ps->isEqual("features.vlfeat.sift.normalization", "l1"))
-					fts.row(k) /= OpenCV::getL1Norm(fts.row(k));
+					norm =  OpenCV::getL1Norm(fts.row(k));
+				if (norm > 0)
+					fts.row(k) /= norm;
 			}
 			features.push_back(fts);
 			free(img_vec_smooth);
+			vl_dsift_delete(dsift);
 		}
 
-		vl_dsift_delete(dsift);
 #endif
 
 		OpenCV::exportKeyPoints(kname, kpts2);

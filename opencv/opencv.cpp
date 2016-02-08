@@ -498,3 +498,12 @@ QString OpenCV::toSvmLine(const Mat &spm, int label)
 	}
 	return line;
 }
+
+Mat OpenCV::histIntersect(const Mat &m1, const Mat &m2)
+{
+	Mat m = Mat::zeros(m1.rows, m1.cols, CV_32F);
+	for (int i = 0; i < m.rows; i++)
+		for (int j = 0; j < m.cols; j++)
+			m.at<float>(i, j) = qMin(m1.at<float>(i, j), m2.at<float>(i, j));
+	return m;
+}

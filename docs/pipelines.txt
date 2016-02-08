@@ -53,7 +53,7 @@ Valid Parameters:
 
 New parameters:
 
-features.step_sizes
+features.bin_sizes
 features.lib
 features.vlfeat.sift.normalization
 encoding.vlad.knn_count

@@ -182,11 +182,12 @@ RawBuffer ClassificationPipeline::exportForSvm(const RawBuffer &buf, int priv)
 	int index = buf.constPars()->streamBufferNo;
 	TrainInfo *info = trainInfo[index];
 	CVBuffer *cbuf = (CVBuffer *)&buf;
-	const Mat &desc = cbuf->getReferenceMat() / OpenCV::getL2Norm(cbuf->getReferenceMat());
+	const Mat &desc = cbuf->getReferenceMat();
 	int label = info->label;
 	QString line = QString("%1 ").arg(label);
 	float *data = (float *)desc.row(0).data;
 	for (int j = 0; j < desc.cols; j++) {
+		assert(!Common::isNan(data[j]));
 		if (data[j] != 0)
 			line.append(QString("%1:%2 ").arg(j + 1).arg(data[j]));
 	}
@@ -313,7 +314,6 @@ void ClassificationPipeline::pipelineFinished()
 void ClassificationPipeline::init(PipelineSettings *s)
 {
 	ps = s;
-	compatSettings();
 
 	checkParameters();
 
@@ -384,7 +384,8 @@ void ClassificationPipeline::initTrainTest()
 			.arg(pars.dataPath);
 	if (pars.datasetName == "voc") {
 		images.clear();
-		QList<QPair<int, QString> > list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "trainval", "bus");
+		QString voccat = ps->get("data.dataset.voc_category").toString();
+		QList<QPair<int, QString> > list = dm->voc2007GetImagesForCateogory(QString(pars.datasetPath).remove("JPEGImages"), "trainval", voccat);
 		for (int i = 0; i < list.size(); i++) {
 			const QPair<int, QString> &p = list[i];
 			TrainInfo *info = new TrainInfo;
@@ -396,7 +397,7 @@ void ClassificationPipeline::initTrainTest()
 			images << info->imageFileName;
 			augmentTrainData(trainInfo, info, pars.dataAug);
 		}
-		list = dm->voc2007GetImagesForCateogory(pars.datasetPath.remove("JPEGImages"), "test", "bus");
+		list = dm->voc2007GetImagesForCateogory(QString(pars.datasetPath).remove("JPEGImages"), "test", voccat);
 		for (int i = 0; i < list.size(); i++) {
 			const QPair<int, QString> &p = list[i];
 			TrainInfo *info = new TrainInfo;
@@ -552,8 +553,9 @@ void ClassificationPipeline::createTrainTestSplit(const QString &trainSetFileNam
 	Common::exportText(lines.join("\n"), trainSetFileName);
 }
 
-void ClassificationPipeline::compatSettings()
+ClassificationPipeline::parameters ClassificationPipeline::compatSettings(PipelineSettings *ps)
 {
+	parameters pars;
 	pars.ft = (ftype)ps->get("features.type").toInt();
 	pars.xStep = ps->get("features.x_step").toInt();
 	pars.yStep = ps->get("features.y_step").toInt();
@@ -599,6 +601,8 @@ void ClassificationPipeline::compatSettings()
 	pars.spatialSize = ps->get("cnn.spatial_size").toInt();
 	pars.targetCaffeModel = ps->get("cnn.caffe.target_model").toInt();
 	pars.featureMergingMethod = ps->get("cnn.feature_merging").toInt();
+
+	return pars;
 }
 
 int ClassificationPipeline::pipelineOutput(BaseLmmPipeline *p, const RawBuffer &buf)

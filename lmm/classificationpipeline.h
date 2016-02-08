@@ -111,6 +111,7 @@ public:
 	explicit ClassificationPipeline(QObject *parent = 0);
 	explicit ClassificationPipeline(const struct parameters &params, QObject *parent = 0);
 	void init(PipelineSettings *s);
+	static parameters compatSettings(PipelineSettings *ps);
 
 	/* buffer operations */
 	virtual const RawBuffer readNextImage();
@@ -133,7 +134,6 @@ protected:
 
 	void augmentTrainData(QList<TrainInfo *> &trainInfo, TrainInfo *info, int dataAug);
 	void createTrainTestSplit(const QString &trainSetFileName);
-	void compatSettings();
 
 	virtual int pipelineOutput(BaseLmmPipeline *, const RawBuffer &buf);
 
