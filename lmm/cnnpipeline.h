@@ -28,6 +28,7 @@ protected:
 	virtual QString getExportFilename(const QString &imname, const QString &suffix);
 
 	const QList<CaffeCnn *> getCurrentThreadCaffe(int priv);
+	cv::Mat extractImageFeature(const cv::Mat &img);
 
 	void createExtractionPipeline();
 	void createCNNFC7Pipeline();

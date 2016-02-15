@@ -27,6 +27,7 @@ public:
 	static Mat merge(const vector<Mat> &vec, MergeMethod mm = MM_CONCAT);
 	static Mat rotate(const Mat &img, float angle);
 	static Mat gammaCorrection(const Mat &img, float gamma);
+	static vector<Mat> subImages(const Mat &img, int rows, int cols);
 signals:
 
 public slots:

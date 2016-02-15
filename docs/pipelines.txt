@@ -58,3 +58,4 @@ features.lib
 features.vlfeat.sift.normalization
 encoding.vlad.knn_count
 encoding.vlad.flags
+data.split.train_list_format

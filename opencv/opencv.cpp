@@ -99,6 +99,20 @@ Mat OpenCV::gammaCorrection(const Mat &img, float gamma)
 	return dst;
 }
 
+vector<Mat> OpenCV::subImages(const Mat &img, int rows, int cols)
+{
+	vector<Mat> subs;
+	int W = img.cols;
+	int H = img.rows;
+	int w = floor(W / (float)cols);
+	int h = floor(H / (float)rows);
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j++)
+			subs.push_back(img(Rect(j * w, i * h, w, h)));
+	}
+	return subs;
+}
+
 float OpenCV::getL1Norm(const Mat &m1)
 {
 	return norm(m1, NORM_L1);

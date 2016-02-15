@@ -140,6 +140,10 @@ const RawBuffer ClassificationPipeline::readNextImage()
 	Mat img = OpenCV::loadImage(info->imageFileName, pars.imFlags);
 	int w = img.cols;
 	int h = img.rows;
+	if (w == 0 || h == 0) {
+		mDebug("empty image %s", qPrintable(info->imageFileName));
+		return RawBuffer("application/empty", 1);
+	}
 	int modelW = 227 * 2;
 	int modelH = 227 * 2;
 	int tw = modelW < w ? modelW : w / 2;
@@ -420,6 +424,7 @@ void ClassificationPipeline::initTrainTest()
 			info->label = vals[0].toInt();
 			info->useForTrain = vals[1].toInt();
 			info->useForTest = vals[2].toInt();
+			assert(ind < images.size());
 			info->imageFileName = images[ind++];
 			trainInfo << info;
 
@@ -430,7 +435,7 @@ void ClassificationPipeline::initTrainTest()
 		/* split into train/test */
 		if (pars.trainListTxt.isEmpty())
 			createTrainTestSplit(trainSetFileName);
-		else {
+		else if (ps->get("data.split.train_list_format").toString() == "ucf101") {
 			QHash<QString, int> tthash;
 			QHash<QString, int> cats;
 			QStringList trainList = Common::importText(pars.trainListTxt);
@@ -477,7 +482,34 @@ void ClassificationPipeline::initTrainTest()
 			}
 			lines << "";
 			Common::exportText(lines.join("\n"), trainSetFileName);
-		}
+		} else if (ps->get("data.split.train_list_format").toString() == "scene67") {
+			QStringList trainList = Common::importText(pars.trainListTxt);
+			QStringList testList = Common::importText(pars.testListTxt);
+			QStringList cats;
+			QStringList lines;
+			for (int i = 0; i < images.size(); i++) {
+				TrainInfo *info = new TrainInfo;
+				info->useForTrain = info->useForTest = false;
+				QFileInfo fi(images[i]);
+				QString dirname = fi.dir().dirName();
+				if (!cats.contains(dirname))
+					cats << dirname;
+				QString key = QString("%1/%2").arg(dirname).arg(fi.fileName());
+				if (trainList.contains(key))
+					info->useForTrain = true;
+				if (testList.contains(key))
+					info->useForTest = true;
+				info->label = cats.indexOf(dirname) + 1;
+				info->imageFileName = images[i];
+				assert(info->label > 0);
+				trainInfo << info;
+				lines << QString("%1:%2:%3").arg(info->label).arg(info->useForTrain).arg(info->useForTest);
+			}
+			lines << "";
+			Common::exportText(lines.join("\n"), trainSetFileName);
+			assert(0);
+		} else
+			assert(0);
 	}
 }
 

@@ -4,6 +4,7 @@
 #include "common.h"
 #include "caffe/caffecnn.h"
 #include "buffercloner.h"
+#include "pipelinesettings.h"
 
 #include <lmm/debug.h>
 #include <lmm/baselmmpipeline.h>
@@ -142,6 +143,61 @@ const QList<CaffeCnn *> CnnPipeline::getCurrentThreadCaffe(int priv)
 	return list;
 }
 
+Mat CnnPipeline::extractImageFeature(const Mat &img)
+{
+	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
+
+	QString featureLayer = pars.cnnFeatureLayer;
+
+	if (pars.targetCaffeModel < 0) {
+		/* use all models */
+		Mat merged;
+
+		for (int i = 0; i < list.size(); i++) {
+			CaffeCnn *c = list[i];
+			Mat m = c->extractLinear(img, featureLayer);
+			if (pars.featureMergingMethod == 0) {
+				if (i == 0)
+					merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
+
+				for (int j = 0; j < m.cols; j++)
+					merged.at<float>(0, i * m.cols + j) = m.at<float>(0, j);
+			} else if (pars.featureMergingMethod == 1) {
+				if (i == 0)
+					merged = m;
+				else
+					merged += m;
+			} else if (pars.featureMergingMethod == 2) {
+				if (i == 0)
+					merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
+				for (int j = 0; j < m.cols; j++)
+					merged.at<float>(0, j) = qMax<float>(m.at<float>(0, j), merged.at<float>(0, j));
+			}
+
+		}
+
+		if (pars.featureMergingMethod == 1)
+			merged /= list.size();
+
+		if (pars.featureMergingMethod == 2)
+			merged /= OpenCV::getL2Norm(merged);
+
+		return merged;
+	}
+
+	/* use single model */
+	CaffeCnn *c = list[pars.targetCaffeModel];
+	if (!c)
+		return Mat();
+	if (featureLayer.contains("&"))
+		return c->extractLinear(img, featureLayer.split("&"));
+	if (pars.spatialSize == 0) {
+		const Mat &m = c->getLayerDimensions(featureLayer);
+		pars.spatialSize = m.at<float>(0, 0);
+	}
+	return c->extractLinear(img, featureLayer);
+}
+
 void CnnPipeline::createExtractionPipeline()
 {
 	BaseLmmPipeline *p1 = addPipeline();
@@ -255,59 +311,43 @@ RawBuffer CnnPipeline::cnnExtract(const RawBuffer &buf, int priv)
 	if (buf.getMimeType() != "application/cv-mat")
 		return RawBuffer();
 
-	const QList<CaffeCnn *> list = getCurrentThreadCaffe(0);
 	CVBuffer *cbuf = (CVBuffer *)&buf;
 	const Mat &img = cbuf->getReferenceMat();
 
-	QString featureLayer = pars.cnnFeatureLayer;
+	QString imname = QString::fromUtf8(buf.constPars()->metaData);
+	QString fname = getExportFilename(imname, "bin");
+	if (pars.useExisting && QFile::exists(fname))
+		return CVBuffer::createNewBuffer(OpenCV::importMatrix(fname), buf);
 
-	if (pars.targetCaffeModel < 0) {
-		/* use all models */
-		Mat merged;
-
-		for (int i = 0; i < list.size(); i++) {
-			CaffeCnn *c = list[i];
-			Mat m = c->extractLinear(img, featureLayer);
-			if (pars.featureMergingMethod == 0) {
-				if (i == 0)
-					merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
-				for (int j = 0; j < m.cols; j++)
-					merged.at<float>(0, i * m.cols + j) = m.at<float>(0, j);
-			} else if (pars.featureMergingMethod == 1) {
-				if (i == 0)
-					merged = m;
-				else
-					merged += m;
-			} else if (pars.featureMergingMethod == 2) {
-				if (i == 0)
-					merged = Mat::zeros(1, list.size() * m.cols, CV_32F);
-				for (int j = 0; j < m.cols; j++)
-					merged.at<float>(0, j) = qMax<float>(m.at<float>(0, j), merged.at<float>(0, j));
-			}
-
+	Mat fts;
+	if (!ps->get("cnn.spatial.rows").toInt()) {
+		fts = extractImageFeature(img);
+	} else {
+		int rows = ps->get("cnn.spatial.rows").toInt();
+		int cols = ps->get("cnn.spatial.cols").toInt();
+		assert(rows);
+		assert(cols);
+		vector<Mat> images = OpenCV::subImages(img, rows, cols);
+		for (uint i = 0; i < images.size(); i++) {
+			Mat ft = extractImageFeature(images[i]);
+#if 0
+			if (fts.rows == 0)
+				fts = Mat::zeros(1, ft.cols * images.size(), CV_32F);
+			for (int j = 0; j < ft.cols; j++)
+				fts.at<float>(0, i * ft.cols + j) = ft.at<float>(0, j);
+#else
+			if (fts.rows == 0)
+				fts = Mat::zeros(1, ft.cols, CV_32F);
+			for (int j = 0; j < ft.cols; j++)
+				fts.at<float>(0, j) = qMax(ft.at<float>(0, j), fts.at<float>(0, j));
+#endif
 		}
-
-		if (pars.featureMergingMethod == 1)
-			merged /= list.size();
-
-		if (pars.featureMergingMethod == 2)
-			merged /= OpenCV::getL2Norm(merged);
-
-		return CVBuffer::createNewBuffer(merged, buf);
+		fts /= OpenCV::getL2Norm(fts);
 	}
+	if (pars.exportData)
+		OpenCV::exportMatrix(fname, fts);
 
-
-	/* use single model */
-	CaffeCnn *c = list[pars.targetCaffeModel];
-	if (!c)
-		return buf;
-	if (featureLayer.contains("&"))
-		return CVBuffer::createNewBuffer(c->extractLinear(img, featureLayer.split("&")), buf);
-	if (pars.spatialSize == 0) {
-		const Mat &m = c->getLayerDimensions(featureLayer);
-		pars.spatialSize = m.at<float>(0, 0);
-	}
-	return CVBuffer::createNewBuffer(c->extractLinear(img, featureLayer), buf);
+	return CVBuffer::createNewBuffer(fts, buf);
 }
 
 static const vector<Mat> extractCnnFeatures(const Mat &img, const QString layerDesc, const QString &descTypes, CaffeCnn *c, int aug)
