@@ -39,7 +39,8 @@ SOURCES += main.cpp \
     lmm/buffercloner.cpp \
     lmm/bowpipeline.cpp \
     lmm/cnnpipeline.cpp \
-    lmm/pipelinesettings.cpp
+    lmm/pipelinesettings.cpp \
+    lmm/videopipeline.cpp
 
 HEADERS  += \
     scripting/scriptedit.h \
@@ -66,12 +67,13 @@ HEADERS  += \
     lmm/bowpipeline.h \
     lmm/cnnpipeline.h \
     lmm/lmmelements.h \
-    lmm/pipelinesettings.h
+    lmm/pipelinesettings.h \
+    lmm/videopipeline.h
 
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 vlfeat lmm caffe cuda ui
+CONFIG += opencv2 vlfeat lmm caffe cuda ui ffmpeg
 
 ui { include(widgets/widgets.pri) }
 
@@ -142,6 +144,25 @@ caffe {
 cuda {
     INCLUDEPATH += /usr/local/cuda/include
     LIBS += -L/usr/local/cuda/lib64 -lcuda -lcudart -lcublas -lcurand -lcudnn
+}
+
+ffmpeg {
+    #LIBS += -L -lavcodec -lavformat -lavutil
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libavformat.a
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libavcodec.a
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libavdevice.a
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libavutil.a
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libswresample.a
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libswresample.a
+    LIBS += /home/amenmd/myfs/source-codes/oss/ffmpeg/ffmpeg/ffmpeg_build/lib/libswscale.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libvorbis.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libvorbisfile.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libvorbisenc.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libtheora.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libtheoraenc.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libopus.a
+    LIBS += /usr/lib/x86_64-linux-gnu/libmp3lame.a
+    LIBS += -lz -llzma -lx264 -lva -logg
 }
 
 LIBS += -L/usr/lib/libblas -lblas
