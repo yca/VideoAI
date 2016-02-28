@@ -509,6 +509,163 @@ vector<Mat> CaffeCnn::getFeatureMaps(const QString &layerName)
 	return maps;
 }
 
+Mat CaffeCnn::getGradients(const QString &layerName)
+{
+#if 0
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+	const float *bdiff = blob->cpu_data() + blob->offset(0);
+	qDebug() << blob->width() << blob->height() << blob->channels();
+	Mat m(blob->height(), blob->width(), CV_32FC3);
+	int off = 0;
+	for (int i = 0; i < blob->channels(); i++) {
+		for (int k = 0; k < m.rows; k++)
+			for (int j = 0; j < m.cols; j++)
+				m.at<Vec2f>(k, j)[i] = bdiff[off++];
+	}
+	return m;
+#else
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+	//Blob<float>* blob = p->net->input_blobs()[0];
+
+	int width = blob->width();
+	int height = blob->height();
+	float* bdiff = blob->mutable_cpu_diff() + blob->offset(0);
+	vector<Mat> channels2;
+	for (int i = 0; i < blob->channels(); ++i) {
+		cv::Mat channel(height, width, CV_32FC1, bdiff);
+		channels2.push_back(channel);
+		bdiff += width * height;
+	}
+	//Mat m;
+	//cv::merge(channels2, m);
+	//return m;
+#endif
+
+	std::vector<cv::Mat> channels8;
+	for (uint i = 0; i < channels2.size(); i++) {
+	//for (int i = channels2.size() - 1; i >= 0; i--) {
+		double min, max;
+		minMaxLoc(channels2[i], &min, &max);
+		channels2[i] -= min;
+		channels2[i] /= max;
+		channels2[i] *= 255;
+		cv::Mat sample(height, width, CV_8U);
+		/*for (int j = 0; j < width; j++)
+			for (int k = 0; k < height; k++)
+				sample.at<uchar>(j, k) = qMin(channels2[i].at<float>(j, k), 255.0f);*/
+		channels2[i].convertTo(sample, CV_8U);
+		channels8.push_back(sample);
+	}
+	Mat merged;
+	cv::merge(channels8, merged);
+	//OpenCV::saveImage("test.jpg", merged);
+	return merged;
+
+	/*std::vector<cv::Mat> channels;
+	std::vector<cv::Mat> channels8;
+	cv::split(m, channels);
+	for (uint i = 0; i < channels.size(); i++) {
+		double min, max;
+		minMaxLoc(channels[i], &min, &max);
+		channels[i] -= min;
+		channels[i] /= max;
+		channels[i] *= 255;
+		cv::Mat sample;
+		channels[i].convertTo(sample, CV_8U);
+		channels8.push_back(sample);
+	}
+	Mat merged;// = Mat::zeros(224, 224, CV_8UC3);
+	cv::merge(channels8, merged);
+	return merged;*/
+}
+
+Mat CaffeCnn::getSaliencyMap()
+{
+	Mat smap = getSaliencyDiff();
+
+	double min, max;
+	minMaxLoc(smap, &min, &max);
+	smap -= min;
+	smap /= max / 255;
+	Mat sample;
+	smap.convertTo(sample, CV_8U);
+	return sample;
+}
+
+vector<Mat> CaffeCnn::getSaliencyMapVect()
+{
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name("data");
+	int width = blob->width();
+	int height = blob->height();
+	float* bdiff = blob->mutable_cpu_diff() + blob->offset(0);
+	vector<Mat> channels;
+	for (int i = 0; i < blob->channels(); ++i) {
+		double min, max;
+		cv::Mat channel(height, width, CV_32FC1, bdiff);
+		minMaxLoc(channel, &min, &max);
+		channel -= min;
+		channel /= max;
+		channel *= 255;
+		cv::Mat sample(height, width, CV_8U);
+		channel.convertTo(sample, CV_8U);
+		channels.push_back(sample);
+		bdiff += width * height;
+	}
+	return channels;
+}
+
+QImage CaffeCnn::getSaliencyMapGray()
+{
+#if 0
+	Mat smap = getSaliencyMapRgb();
+	QImage im(smap.cols, smap.rows, QImage::Format_RGB888);
+	for (int i = 0; i < smap.cols; i++) {
+		for (int j = 0; j < smap.rows; j++) {
+			float b = smap.at<Vec3f>(j, i)[0];
+			float g = smap.at<Vec3f>(j, i)[1];
+			float r = smap.at<Vec3f>(j, i)[2];
+			//float val = qMax(, smap.at<Vec3f>(j, i)[1]);
+			//val = qMax(val, smap.at<Vec3f>(j, i)[2]);
+			im.setPixel(i, j, qRgb(r, g, b));
+		}
+	}
+#endif
+
+	vector<Mat> channels = getSaliencyMapVect();
+	Mat smap = channels[0] + channels[1];
+	smap = channels[1];//cv::max(channels[2], smap);
+	QImage im(smap.cols, smap.rows, QImage::Format_RGB888);
+	for (int i = 0; i < smap.cols; i++)
+		for (int j = 0; j < smap.rows; j++)
+			im.setPixel(i, j, qRgb(smap.at<uchar>(j, i), smap.at<uchar>(j, i), smap.at<uchar>(j, i)));
+	return im;
+}
+
+Mat CaffeCnn::getSaliencyMapRgb()
+{
+	vector<Mat> channels = getSaliencyMapVect();
+	Mat merged;
+	cv::merge(channels, merged);
+	return merged;
+}
+
+Mat CaffeCnn::getSaliencyDiff()
+{
+	const shared_ptr<Blob<float> > blob = p->net->blob_by_name("data");
+
+	int width = blob->width();
+	int height = blob->height();
+	float* bdiff = blob->mutable_cpu_diff() + blob->offset(0);
+	Mat smap = Mat::zeros(height, width, CV_32F);
+	for (int i = 0; i < blob->channels(); ++i) {
+		cv::Mat channel(height, width, CV_32FC1, bdiff);
+		smap = cv::max(smap, channel);
+		bdiff += width * height;
+	}
+
+	return smap;
+}
+
 int CaffeCnn::forwardImage(const QString &filename)
 {
 	Mat img = OpenCV::loadImage(filename, -1);
@@ -587,3 +744,21 @@ void CaffeCnn::forwardImage(const Mat &img)
 	p->net->ForwardPrefilled();
 }
 
+void CaffeCnn::backward()
+{
+	p->net->Backward();
+}
+
+int CaffeCnn::setBlobDiff(const QString &layerName, const Mat &m)
+{
+	shared_ptr<Blob<float> > blob = p->net->blob_by_name(layerName.toStdString());
+	float *bdiff = blob->mutable_cpu_diff() + blob->offset(0);
+	assert(m.rows * m.cols == blob->height() * blob->width() * blob->channels());
+	int off = 0;
+	for (int i = 0; i < blob->channels(); i++) {
+		for (int k = 0; k < m.rows; k++)
+			for (int j = 0; j < m.cols; j++)
+				bdiff[off++] = m.at<float>(k, j);
+	}
+	return 0;
+}

@@ -2,6 +2,7 @@
 #define CAFFECNN_H
 
 #include <QMutex>
+#include <QImage>
 #include <QObject>
 #include <QStringList>
 
@@ -30,7 +31,16 @@ public:
 	vector<Mat> extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags);
 	vector<Mat> extractMulti(const Mat &img, const QStringList &layers, const QStringList &featureFlags, int augFlags);
 	vector<Mat> getFeatureMaps(const QString &layerName);
+	Mat getGradients(const QString &layerName);
+	Mat getSaliencyMap();
+	vector<Mat> getSaliencyMapVect();
+	QImage getSaliencyMapGray();
+	Mat getSaliencyMapRgb();
+	Mat getSaliencyDiff();
 	int forwardImage(const QString &filename);
+	void forwardImage(const Mat &img);
+	void backward();
+	int setBlobDiff(const QString &layerName, const Mat &m);
 
 	void printLayerInfo();
 	Mat getLayerDimensions(const QString &layer);
@@ -43,7 +53,6 @@ signals:
 public slots:
 
 protected:
-	void forwardImage(const Mat &img);
 	CaffeCnnPriv *p;
 	static QMutex lock;
 };
