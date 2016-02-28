@@ -3,6 +3,8 @@
 
 #include <lmm/baselmmelement.h>
 
+#include <unistd.h>
+
 template <class T>
 class OpElement : public BaseLmmElement
 {
