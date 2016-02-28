@@ -53,6 +53,11 @@ public:
 		if (im.isNull())
 			qDebug("Null image from %s", qPrintable(filename));
 	}
+	void show(const QImage &image)
+	{
+		im = image;
+	}
+
 	void showMat(const Mat &image)
 	{
 		if (image.type() == CV_32F) {
@@ -67,6 +72,11 @@ public:
 					im.setPixel(i, j, image2.at<float>(j, i) * 255);
 				}
 			}
+		} else if (image.type() == CV_32FC3) {
+			vector<Mat> chs;
+			cv::split(image, chs);
+			showMat(chs[0]);
+			return;
 		} else
 			im = QImage((const uchar *)image.data, image.cols,  image.rows, QImage::Format_RGB888);
 		imgSource = image;
@@ -76,7 +86,8 @@ public:
 		p->setPen(Qt::red);
 		p->setBrush(QBrush(Qt::red));
 		p->drawRect(r);
-		p->drawImage(QRect(r.left() + 1, r.top() + 1, r.right() - 1, r.bottom() - 1), im);
+		//p->drawImage(QRect(r.left() + 1, r.top() + 1, r.right() - 1, r.bottom() - 1), im);
+		p->drawImage(r.x(), r.y(), im);
 
 		/* draw OSD */
 		if (osd.size()) {
@@ -155,7 +166,7 @@ void ImageWidget::setCurrentCell(int row, int col)
 
 void ImageWidget::showImageMat(const Mat &image)
 {
-	mInfo("size: %dx%d", image.cols, image.rows);
+	mDebug("size: %dx%d", image.cols, image.rows);
 	grid[curr]->showMat(image);
 	update();
 }
@@ -163,6 +174,12 @@ void ImageWidget::showImageMat(const Mat &image)
 void ImageWidget::showImage(const QString &filename)
 {
 	grid[curr]->show(filename);
+	update();
+}
+
+void ImageWidget::showImage(const QImage &image)
+{
+	grid[curr]->show(image);
 	update();
 }
 

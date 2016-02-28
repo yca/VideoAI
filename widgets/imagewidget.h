@@ -26,6 +26,7 @@ public slots:
 	void setCurrentCell(int row, int col);
 	void showImageMat(const Mat &image);
 	void showImage(const QString &filename);
+	void showImage(const QImage &image);
 
 protected:
 	void paintEvent(QPaintEvent *);
