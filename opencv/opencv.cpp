@@ -168,6 +168,11 @@ Mat OpenCV::loadImage(const QString &filename, int flags)
 	return imread(qPrintable(filename), flags);
 }
 
+Mat OpenCV::loadImage(void *data, int width, int height)
+{
+	return Mat(width, height, CV_8UC3, data);
+}
+
 void OpenCV::printMatInfo(const Mat &m)
 {
 	qDebug("rows: %d cols: %d", m.rows, m.cols);
@@ -520,4 +525,27 @@ Mat OpenCV::histIntersect(const Mat &m1, const Mat &m2)
 		for (int j = 0; j < m.cols; j++)
 			m.at<float>(i, j) = qMin(m1.at<float>(i, j), m2.at<float>(i, j));
 	return m;
+}
+
+QImage OpenCV::toQImage(const Mat &m)
+{
+	QImage im(m.cols, m.rows, QImage::Format_RGB888);
+	if (m.type() == CV_8U) {
+		for (int i = 0; i < m.cols; i++) {
+			for (int j = 0; j < m.rows; j++) {
+				uchar val = m.at<uchar>(j, i);
+				//if (val < 80)
+					//val = 0;
+				im.setPixel(i, j, qRgb(val, val, val));
+			}
+		}
+	} else if (m.type() == CV_8UC3) {
+
+	} else if (m.type() == CV_32F) {
+
+	} else if (m.type() == CV_32FC3) {
+
+	} else
+		assert(0);
+	return im;
 }

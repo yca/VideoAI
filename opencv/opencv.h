@@ -1,6 +1,7 @@
 #ifndef OPENCV_H
 #define OPENCV_H
 
+#include <QImage>
 #include <QObject>
 
 #include <opencv2/opencv.hpp>
@@ -41,6 +42,7 @@ public slots:
 	static Mat blendImages(const Mat &im1, const Mat &im2, double alpha = 0.5, double beta = 0.5);
 	static void saveImage(const QString &filename, const Mat &m);
 	static Mat loadImage(const QString &filename, int flags = IMREAD_GRAYSCALE);
+	static Mat loadImage(void *data, int width, int height);
 	static void printMatInfo(const Mat &m);
 	static int exportMatrix(QString filename, const Mat &m);
 	static Mat importMatrix(QString filename);
@@ -60,6 +62,7 @@ public slots:
 	static bool matContains(const Mat &m, int val);
 	static QString toSvmLine(const Mat &spm, int label);
 	static Mat histIntersect(const Mat &m1, const Mat &m2);
+	static QImage toQImage(const Mat &m);
 protected:
 	Mat refMat;
 };

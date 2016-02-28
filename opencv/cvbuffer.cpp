@@ -75,7 +75,7 @@ RawBuffer CVBuffer::createNewBuffer(const std::vector<Mat> &fts, const RawBuffer
 	return c2;
 }
 
-RawBuffer CVBuffer::createNewBuffer(const Mat &m, const RawBuffer &buf)
+CVBuffer CVBuffer::createNewBuffer(const Mat &m, const RawBuffer &buf)
 {
 	CVBuffer c2(m);
 	c2.pars()->metaData = buf.constPars()->metaData;
