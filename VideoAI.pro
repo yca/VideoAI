@@ -40,7 +40,8 @@ SOURCES += main.cpp \
     lmm/bowpipeline.cpp \
     lmm/cnnpipeline.cpp \
     lmm/pipelinesettings.cpp \
-    lmm/videopipeline.cpp
+    lmm/videopipeline.cpp \
+    lmm/qtvideooutput.cpp
 
 HEADERS  += \
     scripting/scriptedit.h \
@@ -68,7 +69,8 @@ HEADERS  += \
     lmm/cnnpipeline.h \
     lmm/lmmelements.h \
     lmm/pipelinesettings.h \
-    lmm/videopipeline.h
+    lmm/videopipeline.h \
+    lmm/qtvideooutput.h
 
 RESOURCES += \
     scripting/images.qrc
@@ -126,6 +128,8 @@ lmm {
     DEFINES += HAVE_LMM
     SOURCES += lmm/classificationpipeline.cpp opencv/cvbuffer.cpp
     HEADERS += lmm/classificationpipeline.h opencv/cvbuffer.h
+
+    LIBS += -lX11 -lXv
 } else {
     SOURCES += debug.cpp
     HEADERS += debug.h
