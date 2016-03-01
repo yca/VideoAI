@@ -7,6 +7,7 @@
 #include "lmm/cnnpipeline.h"
 #include "lmm/classificationpipeline.h"
 #include "lmm/pipelinesettings.h"
+#include "lmm/videopipeline.h"
 
 #include <QDir>
 #include <QDebug>
@@ -120,6 +121,7 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 {
 	QApplication a(argc, argv);
 	QDir::setCurrent(a.applicationDirPath());
+#if 1
 	ClassificationPipeline *pl;
 	if (args.contains("--conf")) {
 		assert(QFile::exists(args["--conf"]));
@@ -183,6 +185,12 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 	pl->init(PipelineSettings::getInstance());
 	pl->start();
 	return a.exec();
+#else
+	VideoPipeline vp;
+	vp.init(NULL);
+	vp.start();
+	return a.exec();
+#endif
 }
 #else
 static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[])
@@ -191,6 +199,20 @@ static int pipelineImp(const QMap<QString, QString> &args, int argc, char *argv[
 }
 
 #endif
+
+static int pipelineImpVideo(const QMap<QString, QString> &args, int argc, char *argv[])
+{
+	QApplication a(argc, argv);
+	QDir::setCurrent(a.applicationDirPath());
+
+	assert(QFile::exists(args["--conf"]));
+	PipelineSettings::getInstance()->setBackendFile(args["--conf"]);
+
+	VideoPipeline vp;
+	vp.init(NULL);
+	vp.start();
+	return a.exec();
+}
 
 static void accTemp()
 {
@@ -357,9 +379,11 @@ static int calculateAcc(const QMap<QString, QString> &args)
 	QHash<int, float> perClassAcc;
 	QString results = args["--results"];
 	QString test = args["--test-data"];
-	ffDebug() << Snippets::getAcc(results, test, perClassAcc);
+	if (args.contains("--voc"))
+		qDebug() << Snippets::getAP(results, test);
+	else
+		qDebug() << Snippets::getAcc(results, test, perClassAcc);
 	//Snippets::toVOCKit(results);
-	//Snippets::getAP(results, test);
 	return 0;
 }
 
@@ -367,7 +391,7 @@ static int calculateAcc(const QMap<QString, QString> &args)
 static int mergeSvmFiles(const QMap<QString, QString> &args)
 {
 	if (!args["--input2"].contains(","))
-		return LibLinear::merge(args["--input1"], args["--input2"], args["--output"], args["--fcnt"].toInt());
+		return LibLinear::merge(args["--input1"], args["--input2"], args["--output"], args["--fcnt"].toInt(), 2);
 	QString base = args["--input1"];
 	QStringList filenames = args["--input2"].split(",");
 	QStringList outputs = args["--output"].split(",");
@@ -377,7 +401,7 @@ static int mergeSvmFiles(const QMap<QString, QString> &args)
 	for (int i = 1; i < filenames.size(); i++) {
 		ffDebug() << base.arg(K) << base.arg(filenames[i]) << base.arg(outputs[i - 1]) << off;
 		//if (i == 5)
-		LibLinear::merge(base.arg(K), base.arg(filenames[i]), base.arg(outputs[i - 1]), off);
+		LibLinear::merge(base.arg(K), base.arg(filenames[i]), base.arg(outputs[i - 1]), off, 0);
 		off += counts[i].toInt();
 		K = outputs[i - 1].toInt();
 	}
@@ -683,7 +707,8 @@ static int diff2Svms()
 
 	return 0;
 }
-
+#include "widgets/cnnvisualizer.h"
+#include "darknet.h"
 int main(int argc, char *argv[])
 {
 #if QT_VERION >= 0x050000
@@ -693,6 +718,8 @@ int main(int argc, char *argv[])
 	QMap<QString, QString> args = parseArgs(argc, argv);
 	if (args["__app__"].contains("pipeline"))
 		return pipelineImp(args, argc, argv);
+	else if (args["__app__"].contains("video"))
+		return pipelineImpVideo(args, argc, argv);
 	else if (args["__app__"].contains("accuracy") && args.contains("--video"))
 		return calculateAccVideo(args);
 	else if (args["__app__"].contains("accuracy"))
@@ -705,6 +732,27 @@ int main(int argc, char *argv[])
 	/*CaffeCnn::printLayerInfo("/home/amenmd/myfs/tasks/cuda/caffe_master/caffe/examples/net_surgery/VGG_ILSVRC_16_layers_deploy_s1.prototxt");
 	return 0;
 	return diff2Svms();*/
+	/*QApplication a(argc, argv);
+	CNNVisualizer w;
+	w.show();
+	return a.exec();*/
+
+#if 0
+	Darknet dn;
+	dn.init("/home/amenmd/myfs/source-codes/oss/darknet/");
+	dn.loadNetwork("cfg/yolo.cfg", "data/yolo.weights");
+	//dn.yoloImage("data/eagle.jpg", 0.2);
+	Mat img = dn.predictFile("data/dog.jpg");
+	OpenCV::saveImage("test.jpg", img);
+	/*dn.predict("data/eagle.jpg");
+	dn.predict("data/horses.jpg");
+	dn.predict("data/person.jpg");
+	dn.predict("data/scream.jpg");*/
+	//dn.yoloImage("/home/amenmd/myfs/source-codes/oss/darknet/cfg/yolo.cfg", "/home/amenmd/myfs/source-codes/oss/darknet/data/yolo.weights", "/home/amenmd/myfs/source-codes/oss/darknet/data/eagle.jpg", 0.2);
+	return 0;
+#endif
+	args.insert("--conf", "/tmp/pipeline.conf");
+	return pipelineImpVideo(args, argc, argv);
 
 	args.insert("--conf", "/tmp/pipeline.conf");
 	return pipelineImp(args, argc, argv);
@@ -790,9 +838,9 @@ int main(int argc, char *argv[])
 
 	return 0;
 
-	QApplication a(argc, argv);
+	/*QApplication a(argc, argv);
 	MainWindow w;
 	w.show();
 
-	return a.exec();
+	return a.exec();*/
 }

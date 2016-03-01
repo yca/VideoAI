@@ -5,6 +5,7 @@
 
 #include <lmm/pipeline/pipelinemanager.h>
 
+class Darknet;
 class CaffeCnn;
 class BaseLmmDemux;
 class QtVideoOutput;
@@ -20,6 +21,7 @@ public:
 	void init(PipelineSettings *s);
 
 	RawBuffer cnnExtract(const RawBuffer &buf, int priv);
+	RawBuffer yolo(const RawBuffer &buf, int priv);
 signals:
 
 protected slots:
@@ -35,6 +37,7 @@ protected:
 	BaseLmmDemux *demux;
 	X11VideoOutput *vout;
 	QtVideoOutput *vout2;
+	Darknet *dn;
 };
 
 #endif

@@ -5,6 +5,7 @@
 #include "caffe/caffecnn.h"
 #include "pipelinesettings.h"
 #include "opencv/cvbuffer.h"
+#include "darknet.h"
 
 #include <lmm/debug.h>
 #include <lmm/x11videooutput.h>
@@ -37,27 +38,34 @@ VideoPipeline::VideoPipeline(QObject *parent) :
 
 void VideoPipeline::init(PipelineSettings *s)
 {
+	dn = new Darknet;
+	dn->init("/home/amenmd/myfs/source-codes/oss/darknet/");
+	dn->loadNetwork("cfg/yolo.cfg", "data/yolo.weights");
+
 	ps = s;
 
 	BaseLmmPipeline *p1 = addPipeline();
 	demux = new BaseLmmDemux;
 	//demux->setSource("/home/amenmd/Downloads/00006_3dfail.avi");
 	//demux->setSource(QString("%1/%2").arg("/home/amenmd/Videos/").arg("Arsenal vs Barcelona 0-2 - 2016 Highlights and Full goals Champions League 23_02_2016 HD-mPu85sMxu6M.mp4"));
-	demux->setSource(QString("%1/%2").arg("/home/amenmd/Videos/").arg("Paris Saint-Germain PSG vs Chelsea 2-1 ALL GOALS & Highlights Champions League 2016-KCTBf0-UIac.mp4"));
+	//demux->setSource(QString("%1/%2").arg("/home/amenmd/Videos/").arg("Paris Saint-Germain PSG vs Chelsea 2-1 ALL GOALS & Highlights Champions League 2016-KCTBf0-UIac.mp4"));
+	//demux->setSource(QString("%1/%2").arg("/home/amenmd/Videos/").arg("test.mp4"));
+	demux->setSource(QString("%1/%2").arg("/home/amenmd/Videos/").arg("test2.mp4"));
 	p1->append(demux);
 	FFmpegDecoder *dec = new FFmpegDecoder;
 	/* caffe uses bgr channel order */
 	dec->setRgbOutput(false);
 	dec->setBgrOutput(true);
 	p1->append(dec);
-	p1->append(createEl(cnnExtract, 0));
+	//p1->append(createEl(cnnExtract, 0));
+	p1->append(createEl(yolo, 0));
 	p1->end();
 
 	vout = new X11VideoOutput;
 	vout->start();
 	vout2 = new QtVideoOutput;
 	vout2->show();
-	vout2->setInteractive(true);
+	vout2->setInteractive(false);
 }
 
 static RawBuffer getFeatureMapsBuffer(const vector<Mat> &maps, const RawBuffer &buf)
@@ -140,6 +148,20 @@ RawBuffer VideoPipeline::cnnExtract(const RawBuffer &buf, int priv)
 
 	Mat smap = caffe->getSaliencyMap();
 	CVBuffer cbuf = CVBuffer::createNewBuffer(smap, buf);
+	cbuf.pars()->metaData = QByteArray((const char *)buf.constData(), buf.size());
+	cbuf.pars()->captureTime = buf.constPars()->videoWidth * 65536 + buf.constPars()->videoHeight;
+	cbuf.pars()->avPixelFormat = 2;
+	return cbuf;
+}
+
+RawBuffer VideoPipeline::yolo(const RawBuffer &buf, int priv)
+{
+	Q_UNUSED(priv);
+	const Mat &img = OpenCV::loadImage((void *)buf.constData(), buf.constPars()->videoWidth, buf.constPars()->videoHeight);
+	Mat img2 = dn->predict(img, 0.2);
+	//Mat img2 = dn->predictFile("data/dog.jpg");
+	ffDebug() << img2.rows << img2.cols;
+	CVBuffer cbuf = CVBuffer::createNewBuffer(img2, buf);
 	cbuf.pars()->metaData = QByteArray((const char *)buf.constData(), buf.size());
 	cbuf.pars()->captureTime = buf.constPars()->videoWidth * 65536 + buf.constPars()->videoHeight;
 	cbuf.pars()->avPixelFormat = 2;

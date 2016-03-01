@@ -56,7 +56,7 @@ struct model *load_model(const char *model_file_name);
 
 int get_nr_feature(const struct model *model_);
 int get_nr_class(const struct model *model_);
-void get_labels(const struct model *model_, int* label);
+void get_labels_linear(const struct model *model_, int* label);
 double get_decfun_coef(const struct model *model_, int feat_idx, int label_idx);
 double get_decfun_bias(const struct model *model_, int label_idx);
 

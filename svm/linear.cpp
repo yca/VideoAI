@@ -2753,7 +2753,7 @@ int get_nr_class(const model *model_)
 	return model_->nr_class;
 }
 
-void get_labels(const model *model_, int* label)
+void get_labels_linear(const model *model_, int* label)
 {
 	if (model_->label != NULL)
 		for(int i=0;i<model_->nr_class;i++)
