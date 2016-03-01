@@ -41,7 +41,8 @@ SOURCES += main.cpp \
     lmm/cnnpipeline.cpp \
     lmm/pipelinesettings.cpp \
     lmm/videopipeline.cpp \
-    lmm/qtvideooutput.cpp
+    lmm/qtvideooutput.cpp \
+    darknet_helper.c
 
 HEADERS  += \
     scripting/scriptedit.h \
@@ -70,12 +71,14 @@ HEADERS  += \
     lmm/lmmelements.h \
     lmm/pipelinesettings.h \
     lmm/videopipeline.h \
-    lmm/qtvideooutput.h
+    lmm/qtvideooutput.h \
+    darknet_helper.h
+
 
 RESOURCES += \
     scripting/images.qrc
 
-CONFIG += opencv2 vlfeat lmm caffe cuda ui ffmpeg
+CONFIG += opencv2 vlfeat lmm caffe cuda ui ffmpeg darknet
 
 ui { include(widgets/widgets.pri) }
 
@@ -143,6 +146,15 @@ caffe {
     LIBS += -L/usr/lib64/atlas -llmdb
     #-lsatlas
     DEFINES += HAVE_CAFFE
+}
+
+darknet {
+    INCLUDEPATH += /home/amenmd/myfs/source-codes/oss/darknet/install/include/
+    LIBS += /home/amenmd/myfs/source-codes/oss/darknet/install/lib/libdarknet.a
+    DEFINES += HAVE_DARKNET
+    SOURCES += darknet.cpp
+    HEADERS += darknet.h
+    DEFINES += GPU OPENCV
 }
 
 cuda {
