@@ -534,17 +534,24 @@ QImage OpenCV::toQImage(const Mat &m)
 		for (int i = 0; i < m.cols; i++) {
 			for (int j = 0; j < m.rows; j++) {
 				uchar val = m.at<uchar>(j, i);
-				//if (val < 80)
-					//val = 0;
 				im.setPixel(i, j, qRgb(val, val, val));
 			}
 		}
 	} else if (m.type() == CV_8UC3) {
-
+		vector<Mat> chs;
+		cv::split(m, chs);
+		for (int i = 0; i < m.cols; i++) {
+			for (int j = 0; j < m.rows; j++) {
+				uchar b = chs[0].at<uchar>(j, i);
+				uchar g = chs[1].at<uchar>(j, i);
+				uchar r = chs[2].at<uchar>(j, i);
+				im.setPixel(i, j, qRgb(b, g, r));
+			}
+		}
 	} else if (m.type() == CV_32F) {
-
+		assert(0);
 	} else if (m.type() == CV_32FC3) {
-
+		assert(0);
 	} else
 		assert(0);
 	return im;
