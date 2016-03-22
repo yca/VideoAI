@@ -4,6 +4,9 @@
 
 #define USE_LMDB
 
+#ifdef GPU
+#undef GPU
+#endif
 #include <caffe/caffe.hpp>
 #include <caffe/util/db.hpp>
 #include <opencv2/opencv.hpp>

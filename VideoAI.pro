@@ -74,6 +74,7 @@ HEADERS  += \
     lmm/qtvideooutput.h \
     darknet_helper.h
 
+INCLUDEPATH += .
 
 RESOURCES += \
     scripting/images.qrc

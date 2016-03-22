@@ -709,11 +709,14 @@ static int diff2Svms()
 }
 #include "widgets/cnnvisualizer.h"
 #include "darknet.h"
+#include <lmm/lmmcommon.h>
 int main(int argc, char *argv[])
 {
 #if QT_VERION >= 0x050000
 	qInstallMessageHandler(myMessageOutput);
 #endif
+
+	LmmCommon::init();
 
 	QMap<QString, QString> args = parseArgs(argc, argv);
 	if (args["__app__"].contains("pipeline"))
