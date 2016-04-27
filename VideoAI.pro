@@ -42,7 +42,8 @@ SOURCES += main.cpp \
     lmm/pipelinesettings.cpp \
     lmm/videopipeline.cpp \
     lmm/qtvideooutput.cpp \
-    darknet_helper.c
+    darknet_helper.c \
+    lmm/vladpipeline.cpp
 
 HEADERS  += \
     scripting/scriptedit.h \
@@ -72,7 +73,8 @@ HEADERS  += \
     lmm/pipelinesettings.h \
     lmm/videopipeline.h \
     lmm/qtvideooutput.h \
-    darknet_helper.h
+    darknet_helper.h \
+    lmm/vladpipeline.h
 
 INCLUDEPATH += .
 
